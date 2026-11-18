@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "Download Speed Manager",
+  "version": "1.0.0",
+  "description": "Sends downloads, links and videos from your browser to Download Speed Manager.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvHVLVWHZpuexi4D/OwnKhSX1kjinZit686dc3b0EozwZPjoQUb/YWiOVZWUFrcNUQWZOQwBA9okghMi6XNzRw8xqlmW02d7FdVSfTn2GEfNd47xDdKRECEkP0qdeafxsOQinRtJjChRJvQYwcLYukLb5IekNussyg2n58pYZkbD75ux9ygebkIlIilv2wSNeYGgh9VIyCbADR6J5FDg+Sw8Y9cnWuLKWqkx8pUM1ExtIcYTGb69heb5NWODMx8cgjHCly1DJZcY3Uvkcsf8VjH9B9IUDTR7hSeRYH6wUa5wG9wBSyxL3qd6+cicD5ztHP3oVzraeRSTimBBCYEo0WQIDAQAB",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": [
+      "shared.js",
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Download Speed Manager",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "downloads",
+    "downloads.ui",
+    "cookies",
+    "contextMenus",
+    "storage",
+    "nativeMessaging",
+    "webRequest",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "shared.js",
+        "content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "capture@download-speed-manager.local",
+      "strict_min_version": "121.0"
+    }
+  }
+}

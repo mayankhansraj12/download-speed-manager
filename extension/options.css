@@ -1,0 +1,9 @@
+main { max-width: 720px; margin: 0 auto; padding: 28px 24px; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+section { padding: 14px 0; border-top: 1px solid var(--border); }
+section p { margin: 4px 0 10px; }
+textarea { width: 100%; resize: vertical; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.row label { min-width: 200px; }
+.row input { width: 110px; }
+footer { display: flex; align-items: center; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border); }

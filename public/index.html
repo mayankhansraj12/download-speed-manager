@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download Speed Manager</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">↓</span>
+      <h1>Download Speed Manager</h1>
+    </div>
+    <div class="totals" aria-live="polite">
+      <span id="total-speed">0 B/s</span>
+      <span class="muted" id="total-active">0 active</span>
+    </div>
+  </header>
+
+  <main>
+    <form id="add-form" class="add-form" autocomplete="off">
+      <label class="sr-only" for="add-url">Download URL</label>
+      <input id="add-url" type="url" required placeholder="Paste a download link (http or https)…">
+      <label class="field">
+        <span>Connections</span>
+        <select id="add-connections">
+          <option>1</option><option>2</option><option>4</option><option selected>8</option><option>16</option><option>32</option>
+        </select>
+      </label>
+      <button type="submit" class="primary">Download</button>
+    </form>
+    <p id="form-error" class="error" role="alert" hidden></p>
+
+    <section class="settings" aria-label="Settings">
+      <label class="field">
+        <span>Speed limit (KB/s, 0 = unlimited)</span>
+        <input id="set-limit" type="number" min="0" step="64" value="0">
+      </label>
+      <label class="field">
+        <span>Simultaneous downloads</span>
+        <input id="set-concurrent" type="number" min="1" max="16" value="3">
+      </label>
+      <label class="field grow">
+        <span>Save to folder</span>
+        <input id="set-dir" type="text" spellcheck="false">
+      </label>
+    </section>
+
+    <section aria-label="Downloads">
+      <div class="list-head">
+        <h2>Downloads</h2>
+        <span class="muted" id="connection-state">Connecting…</span>
+      </div>
+      <ul id="downloads" class="downloads"></ul>
+      <p id="empty" class="empty">No downloads yet. Paste a link above, or install the browser extension to catch downloads automatically.</p>
+    </section>
+  </main>
+
+  <template id="row-template">
+    <li class="download">
+      <div class="row-top">
+        <span class="name"></span>
+        <span class="status"></span>
+      </div>
+      <canvas class="map" height="14" aria-hidden="true"></canvas>
+      <div class="row-bottom">
+        <span class="sizes"></span>
+        <span class="speed"></span>
+        <span class="eta"></span>
+        <span class="conns"></span>
+        <span class="actions">
+          <button type="button" data-action="pause">Pause</button>
+          <button type="button" data-action="resume">Resume</button>
+          <button type="button" data-action="cancel">Cancel</button>
+          <button type="button" data-action="remove">Remove</button>
+        </span>
+      </div>
+      <p class="row-error error" hidden></p>
+    </li>
+  </template>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+# Release: push a tag like v1.2.3 (on a commit that is on main) and this workflow
+#   1. checks the tag and that CHANGELOG.md describes the release,
+#   2. runs the tests and builds the installer, portable zip and extension with the update source baked in,
+#   3. writes latest.json (version, installer URL, size, SHA-256) and signs it with UPDATE_SIGNING_KEY,
+#   4. verifies that signature against the public key compiled into the app,
+#   5. records build provenance, then publishes everything as a GitHub Release.
+# Installed copies poll releases/latest/download/latest.json, so publishing is what ships the update.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign and publish
+    runs-on: windows-latest
+    timeout-minutes: 30
+    # Add required reviewers to this environment (Settings > Environments) to approve each release by hand.
+    environment: release
+    permissions:
+      contents: write     # create the GitHub Release
+      id-token: write     # sign the provenance attestation
+      attestations: write
+    env:
+      TAG: ${{ github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # full history, to check that the tag is on main
+
+      - name: Check the tag and the changelog
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:TAG -notmatch '^v(\d+\.\d+\.\d+)$') { throw "Release tags look like v1.2.3 (got '$env:TAG')." }
+          $version = $Matches[1]
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) { throw "$env:TAG is not on main. Merge the change first, then tag a commit on main." }
+
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $section = [regex]::Match($changelog, "(?ms)^## \[$([regex]::Escape($version))\][^\r\n]*\r?\n(.*?)(?=^## \[|\z)")
+          $notes = $section.Groups[1].Value.Trim()
+          if (-not $notes) { throw "Add a '## [$version]' section to CHANGELOG.md before releasing." }
+          $notes += "`n`n---`n"
+          $notes += "**Install:** download ``DownloadSpeedManager-Setup-$version.exe`` and run it. Installed copies update themselves.`n`n"
+          $notes += "**Verify:** ``SHA256SUMS.txt`` lists every file's checksum, and ``gh attestation verify <file> --repo $env:REPOSITORY`` proves a file was built by this workflow."
+          Set-Content -Path "$env:RUNNER_TEMP/notes.md" -Value $notes -Encoding utf8
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test
+        run: dotnet run --project windows/DSM.Tests/DSM.Tests.csproj -c Release
+
+      # Code signing (optional): once a signing service is set up, add a step before
+      # this one that prepares it, and set DSM_SIGN_SCRIPT so build.ps1 signs both exes before checksumming.
+      - name: Build
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./windows/build.ps1 -Version $env:VERSION -Repository $env:REPOSITORY -SkipTests
+
+      - name: Write and sign the update manifest
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          # Optional repository variable: copies older than this are told the update is important.
+          MINIMUM_VERSION: ${{ vars.UPDATE_MINIMUM_VERSION }}
+        run: |
+          if (-not $env:UPDATE_SIGNING_KEY) { throw "The UPDATE_SIGNING_KEY secret is missing. Add it under Settings > Environments > release." }
+          $tool = @('run', '--project', 'windows/tools/ReleaseTool/ReleaseTool.csproj', '-c', 'Release', '--')
+
+          $manifest = @('manifest', '--version', $env:VERSION, '--repository', $env:REPOSITORY,
+                        '--setup', "dist/DownloadSpeedManager-Setup-$($env:VERSION).exe", '--out', 'dist/latest.json')
+          if ($env:MINIMUM_VERSION) { $manifest += @('--minimum', $env:MINIMUM_VERSION) }
+          dotnet @tool @manifest
+          if ($LASTEXITCODE) { throw "Writing latest.json failed." }
+
+          dotnet @tool sign --file dist/latest.json --out dist/latest.json.sig
+          if ($LASTEXITCODE) { throw "Signing latest.json failed." }
+
+          # The secret must match the public key compiled into the app, or installed copies would ignore this release.
+          dotnet @tool verify --file dist/latest.json --signature dist/latest.json.sig --public-key-file windows/DSM/Updates/update-public-key.txt
+          if ($LASTEXITCODE) { throw "UPDATE_SIGNING_KEY doesn't match windows/DSM/Updates/update-public-key.txt." }
+          Get-Content dist/latest.json
+
+      - name: Record build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.exe
+            dist/*.zip
+
+      - name: Publish the GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Draft first, upload everything, then publish: installed copies follow releases/latest, which must
+          # never point at a release whose latest.json or installer is still uploading.
+          gh release create $env:TAG --draft --verify-tag --title "Download Speed Manager $env:VERSION" --notes-file "$env:RUNNER_TEMP/notes.md"
+          if ($LASTEXITCODE) { throw "Creating the release failed." }
+          gh release upload $env:TAG (Get-ChildItem dist -File).FullName
+          if ($LASTEXITCODE) { throw "Uploading the files failed. Delete the draft release and re-run this workflow." }
+          gh release edit $env:TAG --draft=false --latest
+          if ($LASTEXITCODE) { throw "Publishing the release failed." }

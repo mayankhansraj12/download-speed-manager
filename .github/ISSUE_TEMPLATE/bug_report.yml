@@ -1,0 +1,58 @@
+name: Bug report
+description: Something doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. Please check the open issues first in case it's already known. Security problems go through the Security tab instead (see SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Help → About in the app.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is it installed?
+      options:
+        - Installer (Setup.exe)
+        - Portable zip
+        - Built from source
+        - Node.js version
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version (for extension problems)
+      placeholder: Chrome 131
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If a particular link fails, say what kind of site it is. Don't post private or paid links.
+      placeholder: |
+        1. Copy a link to ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Error log
+      description: If the app showed "Something went wrong", paste the end of %APPDATA%\DownloadSpeedManager\errors.log. Remove anything private first.
+      render: text

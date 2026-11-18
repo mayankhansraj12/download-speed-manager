@@ -1,0 +1,27 @@
+node_modules/
+# .NET build output and release packages
+windows/**/bin/
+windows/**/obj/
+windows/publish/
+dist/
+.vs/
+*.user
+TestResults/
+# Download list and settings; contains browser cookies for queued downloads
+data/
+*.part
+*.part.dsm
+*.part.dsm.tmp
+
+# Never commit signing keys. The update-signing private key lives outside the repo and in the
+# UPDATE_SIGNING_KEY secret; only the public key (windows/DSM/Updates/update-public-key.txt) is committed.
+*.pem
+*.pfx
+*.p12
+*.snk
+.dsm-release/
+.env
+.env.*
+
+# Documentation and design notes are kept locally, not published
+docs/

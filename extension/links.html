@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Download links – Download Speed Manager</title>
+  <link rel="icon" href="icons/icon32.png">
+  <link rel="stylesheet" href="ui.css">
+  <link rel="stylesheet" href="links.css">
+</head>
+<body>
+  <header class="bar">
+    <img src="icons/icon32.png" width="28" height="28" alt="">
+    <div>
+      <h1>Download links</h1>
+      <p id="source" class="muted">Reading the page…</p>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Filter by name or address" aria-label="Filter links">
+    <div id="filters" class="chips" role="group" aria-label="Link types"></div>
+  </div>
+
+  <main>
+    <table>
+      <thead>
+        <tr>
+          <th class="pick"><input type="checkbox" id="all" aria-label="Select all shown links"></th>
+          <th>Name</th>
+          <th class="type">Type</th>
+          <th>Address</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="muted empty" hidden>No links match.</p>
+  </main>
+
+  <footer class="actions">
+    <span id="count" class="muted"></span>
+    <span id="result" role="status"></span>
+    <label class="later"><input type="checkbox" id="later"> Add without starting</label>
+    <button id="download" class="go" disabled>Download</button>
+  </footer>
+
+  <script src="shared.js"></script>
+  <script src="links.js"></script>
+</body>
+</html>

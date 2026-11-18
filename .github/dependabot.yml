@@ -1,0 +1,11 @@
+# Keeps the GitHub Actions used by CI and releases up to date (they get security fixes too).
+# The .NET projects have no NuGet packages yet; add a "nuget" entry for /windows when one is added.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

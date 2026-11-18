@@ -1,0 +1,14 @@
+# Normalise line endings in the repository; check out with the platform's endings.
+* text=auto
+
+# Windows-only files keep CRLF so they behave the same in every editor and shell.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.sln text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.ico binary
+*.exe binary
+*.zip binary

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DownloadSpeedManager</AssemblyName>
+    <RootNamespace>Dsm</RootNamespace>
+    <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <ApplicationDefaultFont>Segoe UI, 9pt</ApplicationDefaultFont>
+    <Product>Download Speed Manager</Product>
+    <AssemblyTitle>Download Speed Manager</AssemblyTitle>
+    <Description>Multi-connection download manager for Windows</Description>
+    <Copyright>MIT License</Copyright>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationIcon Condition="Exists('Assets\app.ico')">Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DSM.Tests" />
+    <!-- Where installed copies look for updates (GitHub owner/repo), baked in by the release workflow. -->
+    <AssemblyMetadata Include="UpdateRepository" Value="$(UpdateRepository)" />
+    <!-- Public half of the update-signing key: only manifests signed with the matching private key are trusted. -->
+    <EmbeddedResource Include="Updates\update-public-key.txt" LogicalName="update-public-key.txt" />
+    <EmbeddedResource Include="Assets\app.ico" LogicalName="app.ico" Condition="Exists('Assets\app.ico')" />
+    <!-- Ship the browser extension next to the app so Options can point people to it. -->
+    <None Include="..\..\extension\**\*" Link="extension\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

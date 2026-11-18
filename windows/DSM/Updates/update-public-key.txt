@@ -1,0 +1,4 @@
+# Update-signing public keys (ECDSA P-256, base64 SubjectPublicKeyInfo), one per line.
+# The app installs an update only if latest.json is signed by the matching private key.
+# Added 2026-11-18.
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEjeCJfUbbRA+XniLqtVMmkJbXzC8v1zE5orEZ8DVHfIlHgFiCAOADLAVz4iR9KyKHqiS+sTi1qUqn2JyCIy4k9g==

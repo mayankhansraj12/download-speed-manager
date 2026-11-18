@@ -92,7 +92,9 @@ async function withTemp(fn) {
 
 test("multi-connection download is byte-identical and cleans up", async () => {
   const body = randomBytes(8 * MB);
-  const srv = await serve(body);
+  // Pace the server a little, like a real network: on Linux, loopback is fast enough that each
+  // segment finishes before the next connection opens, so the connections would never overlap.
+  const srv = await serve(body, { delayFor: () => 2 });
   try {
     await withTemp(async (dir) => {
       const d = new Download({ url: `${srv.base}/file`, dir, connections: 8 });

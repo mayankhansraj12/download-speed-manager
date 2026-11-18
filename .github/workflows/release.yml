@@ -34,7 +34,7 @@ jobs:
       TAG: ${{ github.ref_name }}
       REPOSITORY: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # full history, to check that the tag is on main
 
@@ -57,7 +57,7 @@ jobs:
           Set-Content -Path "$env:RUNNER_TEMP/notes.md" -Value $notes -Encoding utf8
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -98,7 +98,7 @@ jobs:
           Get-Content dist/latest.json
 
       - name: Record build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/*.exe

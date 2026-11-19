@@ -21,6 +21,9 @@ internal sealed class ProgressForm : Form
     private readonly NumericUpDown _limit = new() { Minimum = 16, Maximum = 1_000_000, Increment = 64, Width = 90 };
     private readonly CheckBox _closeWhenDone = new() { Text = "Close this window when the download finishes", AutoSize = true, Checked = true };
     private readonly Button _pause;
+    private readonly Button _stop;
+    private readonly Button _openFolder;
+    private readonly Button _close;
     private readonly Button _details;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 500 };
 
@@ -98,15 +101,19 @@ internal sealed class ProgressForm : Form
 
         _pause = UiKit.Button("Pause", (_, _) => TogglePause());
         _details = UiKit.Button("Show connections", (_, _) => ToggleConnections());
-        var stop = UiKit.Button("Stop", async (_, _) =>
+        _stop = UiKit.Button("Stop", async (_, _) =>
         {
             await _item.PauseAsync();
             Close();
         });
-        Theme.Tint(stop, ButtonRole.Stop);
+        Theme.Tint(_stop, ButtonRole.Stop);
+        // Shown instead of Pause and Stop once the download has finished.
+        _openFolder = UiKit.Button("Open folder", (_, _) => Shell.Reveal(_item));
+        _close = UiKit.Button("Close", (_, _) => Close());
+        Theme.Tint(_close, ButtonRole.Primary);
         Controls.Add(grid);
         Controls.Add(header);
-        Controls.Add(UiKit.ButtonRow(stop, _pause, _details));
+        Controls.Add(UiKit.ButtonRow(_close, _openFolder, _stop, _pause, _details));
         MinimumSize = new Size(LogicalToDeviceUnits(580), 0);
 
         _timer.Tick += (_, _) => ShowState(_item);
@@ -116,6 +123,8 @@ internal sealed class ProgressForm : Form
     }
 
     public bool CloseWhenDone => _closeWhenDone.Checked;
+
+    public void KeepOpenWhenDone() => _closeWhenDone.Checked = false;
     public DownloadItem Item => _item;
 
     private static Label Value() => new() { AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 0, 4) };
@@ -146,7 +155,9 @@ internal sealed class ProgressForm : Form
         var canPause = running || d.Status == DownloadStatus.Queued;
         _pause.Text = canPause ? "Pause" : "Resume";
         _pause.ForeColor = canPause ? Theme.WarningText : Theme.SuccessText; // yellow pauses, green resumes
-        _pause.Enabled = d.Status != DownloadStatus.Completed;
+        var done = d.Status == DownloadStatus.Completed;
+        _pause.Visible = _stop.Visible = !done;
+        _openFolder.Visible = _close.Visible = done;
         if (_connections.Visible) RefreshConnections(d);
         if (IsHandleCreated) Taskbar.Set(this, TaskbarFor(d), d.Fraction ?? 0);
     }

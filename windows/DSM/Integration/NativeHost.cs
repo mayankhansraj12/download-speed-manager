@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Dsm.Platform;
+using Dsm.Updates;
 
 namespace Dsm.Integration;
 
@@ -38,7 +39,36 @@ internal static class NativeHost
         switch (Str(message, "type"))
         {
             case "ping":
-                return new { ok = true, app = AppPaths.AppId, version = "1.0" };
+                return new { ok = true, app = AppPaths.AppId, version = "1.0", appVersion = UpdateService.CurrentVersion.ToString(3) };
+
+            case "update-status":
+            {
+                // The extension's periodic check and its popup. The host is the app's own exe, so it checks
+                // the same signed feed with the same built-in key the app uses.
+                var check = UpdateService.CheckAsync().GetAwaiter().GetResult();
+                return new
+                {
+                    ok = check.State != UpdateState.Failed,
+                    state = check.State switch
+                    {
+                        UpdateState.Available => "available",
+                        UpdateState.UpToDate => "uptodate",
+                        UpdateState.NotConfigured => "notconfigured",
+                        _ => "failed",
+                    },
+                    current = UpdateService.CurrentVersion.ToString(3),
+                    latest = check.Manifest?.Version,
+                    required = check.Required,
+                    notesUrl = check.Manifest?.NotesUrl ?? UpdateService.ReleasesPage,
+                    installable = UpdateService.InstalledFolder() is not null,
+                    error = check.Error,
+                };
+            }
+
+            case "install-update":
+                // The popup's Update button: the running app (started if needed) checks, installs and restarts.
+                if (!EnsureAppRunning()) return new { ok = false, error = "Download Speed Manager could not be started" };
+                return new { ok = SingleInstance.Send(new AppCommand { Type = "update" }, 5000) };
 
             case "download":
                 // One download. Silent ones go straight to the queue; others open the New download dialog.

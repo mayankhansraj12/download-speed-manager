@@ -39,7 +39,7 @@ internal static class Program
         instance.CommandReceived += received => shell.Post(() => shell.HandleCommand(received));
         instance.Listen();
         shell.ResumeAfterUpdate(); // continue downloads an update interrupted
-        if (command.Type == "add" || command.StartQueue) shell.HandleCommand(command);
+        if (command.Type is "add" or "update" || command.StartQueue) shell.HandleCommand(command);
 #if DEBUG
         var capture = Array.IndexOf(args, "--capture");
         if (capture >= 0 && capture + 1 < args.Length) Capture.Schedule(shell, args[capture + 1]);

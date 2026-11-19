@@ -78,4 +78,59 @@ const $ = (id) => document.getElementById(id);
     event.preventDefault();
     chrome.runtime.openOptionsPage();
   });
+
+  // Updates: the app checks GitHub every few hours. Show what it found; one click installs it, and the
+  // extension reloads itself once the app has put the new files in place.
+  $("version").textContent = `Version ${chrome.runtime.getManifest().version}`;
+  let update = null;
+  const showUpdate = (found) => {
+    update = found?.state === "available" ? found : null;
+    $("update").hidden = !update;
+    if (!update) return;
+    $("update-title").textContent = `Version ${update.latest} is available`;
+    $("update-detail").textContent = update.installable
+      ? `You have ${update.current}. The app and this extension update together.`
+      : `You have ${update.current}. Get it from the releases page.`;
+    $("update-install").textContent = update.installable ? "Update" : "Download";
+  };
+  if (status.app === "native") {
+    $("update-links").hidden = false;
+    chrome.runtime.sendMessage({ type: "update-status" }).then((reply) => showUpdate(reply?.status));
+  }
+
+  $("update-install").addEventListener("click", async () => {
+    if (!update) return;
+    if (!update.installable) {
+      chrome.tabs.create({ url: update.notesUrl });
+      window.close();
+      return;
+    }
+    const button = $("update-install");
+    button.disabled = true;
+    button.textContent = "Updating…";
+    const reply = await chrome.runtime.sendMessage({ type: "install-update" });
+    $("update-detail").textContent = reply?.ok
+      ? "Download Speed Manager is installing the update and will restart."
+      : reply?.error ?? "The update couldn't be started.";
+    if (!reply?.ok) {
+      button.disabled = false;
+      button.textContent = "Try again";
+    }
+  });
+  $("update-notes").addEventListener("click", (event) => {
+    event.preventDefault();
+    if (update?.notesUrl) chrome.tabs.create({ url: update.notesUrl });
+  });
+  const checkLink = $("check-updates");
+  checkLink.addEventListener("click", async (event) => {
+    event.preventDefault();
+    checkLink.textContent = "Checking…";
+    const found = (await chrome.runtime.sendMessage({ type: "update-status", fresh: true }))?.status;
+    showUpdate(found);
+    checkLink.textContent =
+      found?.state === "available" ? "Update available"
+      : found?.state === "uptodate" ? "Up to date"
+      : found?.state === "notconfigured" ? "No update source"
+      : "Couldn't check";
+  });
 })();

@@ -9,6 +9,18 @@ command line), MINOR for new features, PATCH for fixes.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-19
+
+### Added
+
+- Updates in the browser extension: the toolbar icon shows when a new version is out, the popup has a
+  one-click **Update** button and a **Check for updates** link, and the extension reloads itself after the
+  app has installed its new files.
+- **Options → Updates**: choose how often to check (every hour, 6 hours or day) and see when the last
+  check ran.
+- **Check for updates** and **Install update** in the notification-area menu, and `--update` on the
+  command line.
+
 ## [1.0.0] - 2026-11-19
 
 ### Added

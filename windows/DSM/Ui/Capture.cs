@@ -39,8 +39,11 @@ internal static partial class Capture
             }
             else if (step == 3)
             {
-                new OptionsForm(shell, OptionsTab.General).Show();
-                new OptionsForm(shell, OptionsTab.Browser).Show();
+                // DSM_CAPTURE_OPTIONS=Updates (comma-separated) picks which Options pages to capture.
+                var tabs = Environment.GetEnvironmentVariable("DSM_CAPTURE_OPTIONS") is { Length: > 0 } names
+                    ? names.Split(',').Select(n => Enum.Parse<OptionsTab>(n.Trim(), ignoreCase: true))
+                    : [OptionsTab.General, OptionsTab.Browser];
+                foreach (var tab in tabs) new OptionsForm(shell, tab).Show();
                 var done = shell.Queue.Items.FirstOrDefault(i => i.Status == Dsm.Engine.DownloadStatus.Completed);
                 if (done is not null) new CompletedForm(shell, done).Show();
                 timer.Interval = 2000;

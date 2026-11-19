@@ -19,6 +19,8 @@ public sealed class AppSettings
     public string Theme { get; set; } = "Dark"; // Dark, Light or System (follow Windows)
     public bool CheckForUpdates { get; set; } = true;
     public bool AutoInstallUpdates { get; set; } // install without asking when no downloads are running
+    public int UpdateCheckHours { get; set; } = 6; // how often to check: 1, 6 or 24
+    public DateTime? LastUpdateCheck { get; set; }
 
     private static string FilePath => Path.Combine(AppPaths.DataDir, "settings.json");
 

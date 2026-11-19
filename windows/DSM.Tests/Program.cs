@@ -29,6 +29,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("updates: a signed newer release is offered and its installer verified", UpdateAvailable),
     ("updates: unsigned, altered or older releases are refused", UpdateRefused),
     ("updates: an installer that doesn't match the checksum is deleted", UpdateBadInstaller),
+    ("command line: --update asks the app to update", UpdateCommand),
 };
 
 var only = args.Length > 0 ? args[0] : null;
@@ -377,6 +378,15 @@ static async Task UpdateBadInstaller()
         var plainHttp = FeedServer.Manifest("1.4.0", "http://example.com/setup.exe", setup);
         await Throws<InvalidDataException>(() => UpdateService.DownloadSetupAsync(plainHttp, null, folder: dir), "plain HTTP downloads are refused");
     });
+}
+
+static Task UpdateCommand()
+{
+    Check(CommandLine.Parse(["--update"]).Type == "update", "--update");
+    Check(CommandLine.Parse(["/update"]).Type == "update", "/update");
+    Check(CommandLine.Parse(["--update", "https://example.com/a.zip"]).Type == "update", "a link doesn't turn an update into a download");
+    Check(CommandLine.Parse(["https://example.com/a.zip"]).Type == "add", "a bare link still adds a download");
+    return Task.CompletedTask;
 }
 
 static async Task Throws<T>(Func<Task> run, string message) where T : Exception

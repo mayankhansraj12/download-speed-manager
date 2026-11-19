@@ -16,7 +16,9 @@ internal sealed class Shell : ApplicationContext
     private readonly HashSet<string> _quiet = [];
     private readonly System.Windows.Forms.Timer _trayTimer = new() { Interval = 1000 };
     private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 20_000 }; // first check 20 s after start
+    private readonly ToolStripMenuItem _trayInstall = new() { Visible = false };
     private bool _hiddenNoticeShown;
+    private bool _firstCheckDone;
     private UpdateCheck? _update;
     private bool _installingUpdate;
     private string? _notifiedVersion;
@@ -46,13 +48,41 @@ internal sealed class Shell : ApplicationContext
 
     private static string ResumeFile => Path.Combine(AppPaths.DataDir, "resume-after-update.json");
 
+    /// <summary>The result of the most recent check, if there was one since the app started.</summary>
+    public UpdateCheck? LastCheck { get; private set; }
+
+    private int CheckIntervalMs => (int)TimeSpan.FromHours(Math.Clamp(Settings.UpdateCheckHours, 1, 24)).TotalMilliseconds;
+
+    /// <summary>Every check goes through here: remember when it ran, and surface an available update.</summary>
+    private async Task<UpdateCheck> RunCheckAsync()
+    {
+        var check = await UpdateService.CheckAsync();
+        LastCheck = check;
+        if (check.State is UpdateState.UpToDate or UpdateState.Available)
+        {
+            Settings.LastUpdateCheck = DateTime.Now;
+            try { Settings.Save(); } catch { /* only the timestamp is lost */ }
+        }
+        if (check.State == UpdateState.Available)
+        {
+            _update = check;
+            _trayInstall.Text = $"Install update {check.Manifest!.Version}";
+            _trayInstall.Visible = true;
+        }
+        else if (check.State == UpdateState.UpToDate)
+        {
+            _trayInstall.Visible = false;
+        }
+        return check;
+    }
+
     private async Task AutoCheckForUpdatesAsync()
     {
-        _updateTimer.Interval = (int)TimeSpan.FromHours(6).TotalMilliseconds;
+        _updateTimer.Interval = CheckIntervalMs; // after the first check, 20 s after start
+        _firstCheckDone = true;
         if (!Settings.CheckForUpdates || _installingUpdate) return;
-        var check = await UpdateService.CheckAsync();
+        var check = await RunCheckAsync();
         if (check.State != UpdateState.Available) return;
-        _update = check;
         var portable = UpdateService.InstalledFolder() is null;
         if (Settings.AutoInstallUpdates && !portable && !Queue.Items.Any(d => d.IsActive))
         {
@@ -65,10 +95,34 @@ internal sealed class Shell : ApplicationContext
         _tray.ShowBalloonTip(5000, "Update available", $"Download Speed Manager {check.Manifest.Version} is ready to install.", ToolTipIcon.Info);
     }
 
+    /// <summary>"Update" from the browser extension or --update: check now and install if there is something newer.</summary>
+    public async Task UpdateNowAsync()
+    {
+        if (_installingUpdate) return;
+        ShowMain();
+        var check = await RunCheckAsync();
+        switch (check.State)
+        {
+            case UpdateState.Available:
+                _main.ShowUpdate(check, UpdateService.InstalledFolder() is null);
+                await InstallUpdateAsync();
+                break;
+            case UpdateState.UpToDate:
+                Inform("You're up to date", $"Download Speed Manager {UpdateService.CurrentVersion.ToString(3)} is the latest version.");
+                break;
+            case UpdateState.NotConfigured:
+                Inform("No update source", "This copy was built on this computer, so it has no update source.");
+                break;
+            default:
+                ShowError("Couldn't check for updates", check.Error ?? "Unknown error.");
+                break;
+        }
+    }
+
     /// <summary>Help → Check for updates: always answers, even when there is nothing new.</summary>
     public async Task CheckForUpdatesNowAsync()
     {
-        var check = await UpdateService.CheckAsync();
+        var check = await RunCheckAsync();
         var current = UpdateService.CurrentVersion.ToString(3);
         switch (check.State)
         {
@@ -82,7 +136,6 @@ internal sealed class Shell : ApplicationContext
                 ShowError("Couldn't check for updates", check.Error ?? "Unknown error.");
                 break;
             case UpdateState.Available:
-                _update = check;
                 var portable = UpdateService.InstalledFolder() is null;
                 _main.ShowUpdate(check, portable);
                 var install = new TaskDialogButton(portable ? "Download" : "Install now");
@@ -190,6 +243,11 @@ internal sealed class Shell : ApplicationContext
             Exit(); // pauses downloads (they resume later) and saves the list
             return;
         }
+        if (command.Type == "update")
+        {
+            _ = UpdateNowAsync(); // from the browser extension's Update button, or --update
+            return;
+        }
         if (command.StartQueue) Queue.ResumeAll();
         if (command.Url is { Length: > 0 } url)
         {
@@ -263,6 +321,7 @@ internal sealed class Shell : ApplicationContext
         catch (Exception ex) { ShowError("Couldn't save settings", ex.Message); }
         Queue.ApplySettings();
         _clipboard.Enabled = Settings.MonitorClipboard;
+        if (_firstCheckDone && _updateTimer.Interval != CheckIntervalMs) _updateTimer.Interval = CheckIntervalMs;
         if (Settings.CheckForUpdates) _updateTimer.Start();
         else _updateTimer.Stop();
         try
@@ -370,6 +429,9 @@ internal sealed class Shell : ApplicationContext
         var menu = new ContextMenuStrip { Renderer = Theme.Renderer };
         var open = new ToolStripMenuItem("Open Download Speed Manager", null, (_, _) => ShowMain());
         open.Font = new Font(open.Font, FontStyle.Bold);
+        // Shown once a check finds a newer version: one click downloads, verifies and installs it.
+        _trayInstall.Image = Glyphs.Render(Glyphs.Download, 16, Theme.Success);
+        _trayInstall.Click += async (_, _) => await InstallUpdateAsync();
         var speed = new ToolStripMenuItem("Speed limit", Glyphs.Render(Glyphs.Speed, 16));
         speed.DropDownOpening += (_, _) => Dsm.Ui.MainForm.FillSpeedMenu(speed.DropDownItems, this);
         Dsm.Ui.MainForm.FillSpeedMenu(speed.DropDownItems, this);
@@ -382,6 +444,8 @@ internal sealed class Shell : ApplicationContext
             new ToolStripMenuItem("Pause all", Glyphs.Render(Glyphs.Pause, 16, Theme.Warning), async (_, _) => await Queue.PauseAllAsync()),
             speed,
             new ToolStripSeparator(),
+            _trayInstall,
+            new ToolStripMenuItem("Check for updates…", null, async (_, _) => await CheckForUpdatesNowAsync()),
             new ToolStripMenuItem("Exit", null, (_, _) => Exit()),
         ]);
         _tray.Icon = new Icon(AppIcon, SystemInformation.SmallIconSize);

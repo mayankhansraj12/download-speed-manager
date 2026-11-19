@@ -204,11 +204,68 @@ function openLinkPicker(tabId, selectionOnly) {
   chrome.tabs.create({ url: chrome.runtime.getURL(`links.html?${query}`) });
 }
 
+// ---- Updates -------------------------------------------------------------------------------
+// The Windows app updates itself from GitHub Releases, and the extension's files with it (they
+// live in the app's folder). Every 30 minutes the extension reloads itself if newer files are on
+// disk, and every few hours it asks the app whether an update is waiting, to show it on the badge.
+
+const UPDATE_ALARM = "dsm-updates";
+const RELOAD_ALARM = "dsm-reload-check";
+const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000;
+
+/** An app update replaced the files on disk: reload so the browser runs the new version. */
+async function reloadIfUpdated() {
+  try {
+    const response = await fetch(chrome.runtime.getURL("manifest.json"), { cache: "no-store" });
+    const { version } = await response.json();
+    if (version && version !== chrome.runtime.getManifest().version) chrome.runtime.reload();
+  } catch {
+    // store-installed copies can't change on disk; nothing to do
+  }
+}
+
+/** Ask the app (through the native host) whether a newer version is out, and remember the answer. */
+async function checkForUpdate() {
+  const reply = await nativeSend({ type: "update-status" });
+  const updateStatus = reply?.state ? { ...reply, checkedAt: Date.now() } : null;
+  await chrome.storage.local.set({ updateStatus });
+  await updateBadge();
+  return updateStatus;
+}
+
 async function updateBadge() {
   const { enabled } = await DSM.settings();
-  await chrome.action.setBadgeText({ text: enabled ? "" : "off" });
-  await chrome.action.setBadgeBackgroundColor({ color: "#a16207" }); // yellow: paused
+  const { updateStatus } = await chrome.storage.local.get("updateStatus");
+  const update = updateStatus?.state === "available" ? updateStatus : null;
+  if (!enabled) {
+    await chrome.action.setBadgeText({ text: "off" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#a16207" }); // yellow: paused
+  } else {
+    await chrome.action.setBadgeText({ text: update ? "↑" : "" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#2563eb" }); // blue: an update is waiting
+  }
+  await chrome.action.setTitle({
+    title: update ? `Download Speed Manager: version ${update.latest} is available` : "Download Speed Manager",
+  });
 }
+
+chrome.alarms.get(UPDATE_ALARM, (alarm) => {
+  if (!alarm) chrome.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: 30 });
+});
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === RELOAD_ALARM) {
+    // Just after the Update button: watch for the new files every minute, for ten minutes.
+    const { reloadWatchUntil = 0 } = await chrome.storage.local.get("reloadWatchUntil");
+    if (Date.now() > reloadWatchUntil) chrome.alarms.clear(RELOAD_ALARM);
+    await reloadIfUpdated();
+    return;
+  }
+  if (alarm.name !== UPDATE_ALARM) return;
+  await reloadIfUpdated();
+  const { updateStatus } = await chrome.storage.local.get("updateStatus");
+  if (!updateStatus || Date.now() - updateStatus.checkedAt > UPDATE_CHECK_MS) await checkForUpdate();
+});
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
@@ -260,6 +317,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "pick-links":
         openLinkPicker(message.tabId, false);
         return { ok: true };
+      case "update-status": {
+        if (!fromExtensionPage(sender)) throw new Error("Not allowed.");
+        const { updateStatus } = await chrome.storage.local.get("updateStatus");
+        const stale = !updateStatus || Date.now() - updateStatus.checkedAt > UPDATE_CHECK_MS;
+        return { ok: true, status: message.fresh || stale ? await checkForUpdate() : updateStatus };
+      }
+      case "install-update": {
+        if (!fromExtensionPage(sender)) throw new Error("Not allowed.");
+        const reply = await nativeSend({ type: "install-update" });
+        if (!reply?.ok) throw new Error(reply?.error ?? "Download Speed Manager couldn't be reached.");
+        // The app takes it from here; reload as soon as it has put the new files in place.
+        await chrome.storage.local.set({ updateStatus: null, reloadWatchUntil: Date.now() + 10 * 60 * 1000 });
+        await updateBadge();
+        chrome.alarms.create(RELOAD_ALARM, { delayInMinutes: 1, periodInMinutes: 1 });
+        return { ok: true };
+      }
       default:
         throw new Error("Unknown message.");
     }

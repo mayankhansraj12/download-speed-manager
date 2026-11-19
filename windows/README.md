@@ -90,12 +90,21 @@ if needed. No local web server is involved.
 
 ## Updates
 
-Installed copies keep themselves up to date from this repository's GitHub Releases. They check 20
-seconds after starting and then every 6 hours, or at once with **Help → Check for updates**. When a
-newer version is out, a bar offers **Install update**. The app checks the release's signature and the
-installer's SHA-256, installs it silently, restarts, and continues the downloads that were running.
-**Options → Updates** turns automatic checks off, or lets updates install without asking when nothing is
-downloading. Nothing besides these requests is sent anywhere.
+Installed copies keep themselves up to date from this repository's GitHub Releases.
+
+| Where | What it does |
+|---|---|
+| Automatically | 20 seconds after start, then every hour, 6 hours or day (**Options → Updates**) |
+| Update bar | Appears at the top of the window when a newer version is out: **Install update**, **What's new**, **Later** |
+| **Help → Check for updates**, the notification-area menu, **Options → Updates → Check now** | Check right away; the tray menu also gets **Install update** when one is waiting |
+| Browser extension | The toolbar icon shows **↑**; the popup's **Update** button installs it |
+| `DownloadSpeedManager.exe --update` | Check and install from a script |
+
+Every update is checked against the release's signature and the installer's SHA-256, installed
+silently, and followed by a restart that continues the downloads that were running. The extension's
+files are part of the app, so they update in the same step, and the extension reloads itself when it
+sees the new files. **Options → Updates** can turn automatic checks off, or let updates install
+without asking whenever nothing is downloading. Nothing besides these requests is sent anywhere.
 
 ## Command line
 

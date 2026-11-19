@@ -61,7 +61,7 @@
 <td width="50%" valign="top">
 
 ### Safe and up to date
-- **Signed automatic updates** from GitHub Releases, checked with ECDSA P-256 and SHA-256
+- **One-click, signed updates** for the app and the browser extension, checked automatically and verified with ECDSA P-256 and SHA-256
 - **Per-user installer**: no administrator rights, clean uninstall
 - **No telemetry**: it only contacts the servers you download from, and GitHub for updates
 
@@ -140,7 +140,7 @@ The extension hands downloads from Chrome, Edge, Brave and Firefox to the app th
 <tr>
 <td width="36%" align="center" valign="top">
 <img src=".github/assets/screenshots/extension-popup.png" alt="Extension popup">
-<br><sub><b>Popup</b>: status, on/off switches and media found on the page</sub>
+<br><sub><b>Popup</b>: status, updates, on/off switches and media found on the page</sub>
 </td>
 <td width="64%" align="center" valign="top">
 <img src=".github/assets/screenshots/extension-video.png" alt="Download video button over a video">
@@ -157,9 +157,10 @@ The extension hands downloads from Chrome, Edge, Brave and Firefox to the app th
 
 - **Catch downloads** you start in the browser, with file types and a minimum size you choose. Hold <kbd>Alt</kbd> while clicking to let the browser download instead.
 - **Right-click menu**: *Download with Download Speed Manager*, *Download this video or audio*, and *Download all links*.
+- **Updates**: the toolbar icon shows **↑** when a new version is out. **Update** in the popup installs it, and the extension reloads itself once the app has put the new files in place.
 - If the app isn't running, the browser starts it; if it isn't installed, the browser simply downloads as usual.
 
-**Install it:** open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder in the app's install folder. In Firefox, open `about:debugging#/runtime/this-firefox` and choose **Load Temporary Add-on**.
+**Install it:** open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder in the app's install folder (**Options → Browser → Open extension folder**). Loading it from there lets it update together with the app. In Firefox, open `about:debugging#/runtime/this-firefox` and choose **Load Temporary Add-on**.
 
 ## How it works
 
@@ -186,7 +187,7 @@ flowchart LR
 
 **Speed-aware takeover.** Every connection's speed is measured. When a connection finishes its part, it takes over the end of whichever part will finish last, split so that both finish at the same time. That removes the long tail where one slow connection holds up the whole download.
 
-**Signed updates.** Each release publishes a small `latest.json` with the new version and its installer's SHA-256, signed with the project's private key. The app checks the signature with the public key built into it, downloads the installer, checks its checksum, then installs silently and restarts. Downloads that were running carry on.
+**Signed updates.** Each release publishes a small `latest.json` with the new version and its installer's SHA-256, signed with the project's private key. The app checks it automatically (every hour, 6 hours or day; you choose in **Options → Updates**), or right away from **Help → Check for updates**, the notification-area menu or the extension's popup. It verifies the signature with the public key built into it, downloads the installer, checks its checksum, then installs silently and restarts. Downloads that were running carry on. The extension's files ship inside the app, so they update in the same step, and the extension reloads itself when it sees them.
 
 ```mermaid
 sequenceDiagram
@@ -217,6 +218,7 @@ Every run produced a file with the same SHA-256. Results depend on the server an
 DownloadSpeedManager.exe /d <url> [/p <folder>] [/f <file name>] [/n] [/a]
 DownloadSpeedManager.exe /s        start everything waiting in the queue
 DownloadSpeedManager.exe --tray    start hidden in the notification area
+DownloadSpeedManager.exe --update  check for a new version now and install it
 ```
 
 `/n` adds without asking and `/a` adds without starting. If the app is already running, the command is passed to it.

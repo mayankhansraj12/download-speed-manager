@@ -11,12 +11,16 @@
   registrations are backed up first and restored afterwards; the real uninstaller is never run, and
   a copy of the app that is already running is left alone.
 
-  Usage: powershell -ExecutionPolicy Bypass -File windows\tools\test-update.ps1 [-KeyFile path] [-WorkDir path] [-SkipBuild]
+  -ViaBrowser starts the update the way the browser extension's Update button does (through the
+  native-messaging host) instead of waiting for the app's own automatic check.
+
+  Usage: powershell -ExecutionPolicy Bypass -File windows\tools\test-update.ps1 [-KeyFile path] [-WorkDir path] [-SkipBuild] [-ViaBrowser]
 #>
 param(
     [string]$KeyFile = "$env:USERPROFILE\.dsm-release\update-signing-key.pem",
     [string]$WorkDir = (Join-Path ([IO.Path]::GetTempPath()) "dsm-update-test"),
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$ViaBrowser
 )
 $ErrorActionPreference = "Stop"
 $project = Split-Path (Split-Path $PSScriptRoot)
@@ -93,7 +97,7 @@ http.createServer(async (req, res) => {
 
     # 3. Isolated app data: updates install automatically; nothing else touches the system.
     $utf8 = New-Object Text.UTF8Encoding $false
-    $settings = [ordered]@{ checkForUpdates = $true; autoInstallUpdates = $true; browserIntegration = $false
+    $settings = [ordered]@{ checkForUpdates = $true; autoInstallUpdates = -not $ViaBrowser; browserIntegration = $false
         monitorClipboard = $false; launchOnStartup = $false; showProgressWindow = $false; downloadFolder = "$t\downloads" }
     [IO.File]::WriteAllText("$t\data\settings.json", ($settings | ConvertTo-Json), $utf8)
     $paused = [ordered]@{ id = [guid]::NewGuid().ToString("N"); url = "http://127.0.0.1:9/files/keep-me.zip"; fileName = "keep-me.zip"
@@ -112,6 +116,35 @@ http.createServer(async (req, res) => {
     $started = Get-Date
     $first = Start-Process "$install\DownloadSpeedManager.exe" -ArgumentList "--tray" -PassThru
     Log "Started 1.0.0 as PID $($first.Id); waiting for it to update itself"
+    if ($ViaBrowser) {
+        # Exactly what the extension sends: the browser starts the app's exe as a native-messaging host
+        # and writes length-prefixed JSON messages to it.
+        $hostScript = @'
+import { spawn } from "node:child_process";
+const [exe, ...types] = process.argv.slice(2);
+const host = spawn(exe, ["chrome-extension://glhkcjbcocbmlopkkbepbchghfkmplob/"], { stdio: ["pipe", "pipe", "inherit"] });
+let buffer = Buffer.alloc(0);
+host.stdout.on("data", (chunk) => {
+  buffer = Buffer.concat([buffer, chunk]);
+  while (buffer.length >= 4 && buffer.length >= 4 + buffer.readUInt32LE(0)) {
+    const size = buffer.readUInt32LE(0);
+    console.log(buffer.subarray(4, 4 + size).toString());
+    buffer = buffer.subarray(4 + size);
+  }
+});
+for (const type of types) {
+  const body = Buffer.from(JSON.stringify({ type }));
+  const head = Buffer.alloc(4);
+  head.writeUInt32LE(body.length);
+  host.stdin.write(Buffer.concat([head, body]));
+}
+host.stdin.end();
+'@
+        [IO.File]::WriteAllText("$t\host.mjs", $hostScript, (New-Object Text.UTF8Encoding $false))
+        Start-Sleep -Seconds 3
+        Log "Browser extension: ping, update-status, then the Update button (install-update)"
+        node "$t\host.mjs" "$install\DownloadSpeedManager.exe" ping update-status install-update | ForEach-Object { Log "  host replied $_" }
+    }
     $updated = $null
     $sawExit = $false
     while (((Get-Date) - $started).TotalSeconds -lt 150) {

@@ -15,6 +15,15 @@
   <p id="status" class="pill">Checking…</p>
   <p id="hint" class="muted hint" hidden></p>
 
+  <div id="update" class="update" hidden>
+    <div class="update-text">
+      <strong id="update-title"></strong>
+      <span id="update-detail" class="muted"></span>
+      <a href="#" id="update-notes">What's new</a>
+    </div>
+    <button id="update-install" class="go">Update</button>
+  </div>
+
   <section>
     <label class="switch"><span>Catch downloads from the browser</span><input type="checkbox" id="enabled"></label>
     <label class="switch"><span>Show “Download video” on videos</span><input type="checkbox" id="videoButton"></label>
@@ -28,7 +37,11 @@
 
   <footer class="muted">
     Hold <kbd>Alt</kbd> while clicking a link to let the browser download it.
-    <a href="#" id="options">Settings</a>
+    <div class="footer-links">
+      <span id="version"></span>
+      <span id="update-links" hidden>· <a href="#" id="check-updates">Check for updates</a></span>
+      · <a href="#" id="options">Settings</a>
+    </div>
   </footer>
 
   <script src="shared.js"></script>

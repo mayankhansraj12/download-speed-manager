@@ -3,7 +3,7 @@ namespace Dsm.Integration;
 /// <summary>A request to the running app, from the command line, a second instance or the browser.</summary>
 public sealed class AppCommand
 {
-    public string Type { get; set; } = "open"; // open | add | ping | exit
+    public string Type { get; set; } = "open"; // open | add | ping | exit | update
     public string? Url { get; set; }
     public string? FileName { get; set; }
     public string? Folder { get; set; }
@@ -48,12 +48,13 @@ public static class CommandLine
                 case "/s" or "--start-queue": command.StartQueue = true; break;
                 case "/tray" or "--tray": command.Tray = true; break;
                 case "/exit" or "--exit": command.Type = "exit"; break; // used by the installer before updating
+                case "/update" or "--update": command.Type = "update"; break; // check now and install a newer version
                 default:
                     if (Uri.TryCreate(args[i], UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https") command.Url = args[i];
                     break;
             }
         }
-        if (command.Type != "exit" && !string.IsNullOrEmpty(command.Url)) command.Type = "add";
+        if (command.Type is not ("exit" or "update") && !string.IsNullOrEmpty(command.Url)) command.Type = "add";
         return command;
     }
 }

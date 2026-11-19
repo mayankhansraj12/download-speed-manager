@@ -25,6 +25,9 @@ internal sealed class OptionsForm : Form
     private readonly CheckBox _browser = Check("Catch downloads from Chrome, Edge and Firefox");
     private readonly CheckBox _checkUpdates = Check("Check for updates automatically");
     private readonly CheckBox _autoInstall = Check("Install updates without asking when no downloads are running");
+    private static readonly (string Text, int Hours)[] Intervals = [("Every hour", 1), ("Every 6 hours", 6), ("Every day", 24)];
+    private readonly ComboBox _interval = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };
+    private readonly Label _updateStatus = Note("");
     private readonly FlowLayoutPanel _browserStatus = new() { AutoSize = true, WrapContents = false, Margin = new Padding(0, 4, 0, 4) };
     private readonly Panel _pages = new() { Dock = DockStyle.Fill, Padding = new Padding(20, 14, 20, 6) };
     private readonly List<(RadioButton Nav, Control Page)> _sections = [];
@@ -65,10 +68,15 @@ internal sealed class OptionsForm : Form
                  "2. Choose \"Load unpacked\" and select the extension folder.\n" +
                  "3. Downloads you start in the browser now open here."),
             UiKit.Button("Open extension folder", (_, _) => OpenExtensionFolder())));
-        AddSection(nav, "Updates", Glyphs.Download, Page(_checkUpdates, _autoInstall,
-            Note(UpdateSource()),
-            UiKit.Button("Check now", async (_, _) => await shell.CheckForUpdatesNowAsync())));
-        _checkUpdates.CheckedChanged += (_, _) => _autoInstall.Enabled = _checkUpdates.Checked;
+        _interval.Items.AddRange([.. Intervals.Select(i => i.Text)]);
+        var checkNow = UiKit.Button("Check now", async (_, _) =>
+        {
+            await shell.CheckForUpdatesNowAsync();
+            _updateStatus.Text = UpdateStatus(shell);
+        });
+        AddSection(nav, "Updates", Glyphs.Download, Page(_checkUpdates, Row("How often to check", _interval), _autoInstall,
+            _updateStatus, checkNow, Note(UpdateSource())));
+        _checkUpdates.CheckedChanged += (_, _) => _autoInstall.Enabled = _interval.Enabled = _checkUpdates.Checked;
         Select((int)tab);
 
         _startup.Checked = _settings.LaunchOnStartup;
@@ -86,7 +94,9 @@ internal sealed class OptionsForm : Form
         _browser.Checked = _settings.BrowserIntegration;
         _checkUpdates.Checked = _settings.CheckForUpdates;
         _autoInstall.Checked = _settings.AutoInstallUpdates;
-        _autoInstall.Enabled = _checkUpdates.Checked;
+        _autoInstall.Enabled = _interval.Enabled = _checkUpdates.Checked;
+        _interval.SelectedIndex = Math.Max(0, Array.FindIndex(Intervals, i => i.Hours >= _settings.UpdateCheckHours));
+        _updateStatus.Text = UpdateStatus(shell);
         foreach (var (browser, registered) in BrowserIntegration.Status())
         {
             _browserStatus.Controls.Add(new Label
@@ -184,6 +194,18 @@ internal sealed class OptionsForm : Form
         return page;
     }
 
+    /// <summary>"Version 1.2.0 is available." or "Up to date. Last checked 19-11-2026 10:42."</summary>
+    private static string UpdateStatus(Shell shell)
+    {
+        if (shell.LastCheck is { State: UpdateState.Available, Manifest: { } manifest })
+            return $"Version {manifest.Version} is available. Use Install update in the bar at the top of the window.";
+        if (shell.LastCheck is { State: UpdateState.Failed } failed)
+            return $"The last check didn't work: {failed.Error}";
+        return shell.Settings.LastUpdateCheck is { } when
+            ? $"Up to date. Last checked {when:g}."
+            : "Not checked yet.";
+    }
+
     private static string UpdateSource()
     {
         var version = $"You have version {UpdateService.CurrentVersion.ToString(3)}.";
@@ -224,6 +246,7 @@ internal sealed class OptionsForm : Form
         _settings.BrowserIntegration = _browser.Checked;
         _settings.CheckForUpdates = _checkUpdates.Checked;
         _settings.AutoInstallUpdates = _autoInstall.Checked;
+        _settings.UpdateCheckHours = Intervals[Math.Max(0, _interval.SelectedIndex)].Hours;
         DialogResult = DialogResult.OK;
         Close();
     }

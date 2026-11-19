@@ -53,6 +53,7 @@ internal sealed class CompletedForm : Form
         MinimumSize = SizeFromClientSize(new Size(buttons.GetPreferredSize(Size.Empty).Width, 0));
         AcceptButton = open;
         CancelButton = close;
+        ActiveControl = open; // focus the main action, not the check box
 
         Shown += (_, _) =>
         {

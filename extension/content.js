@@ -28,21 +28,32 @@
   shadow.innerHTML = `
     <style>
       button {
-        all: initial; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+        all: initial; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
         padding: 7px 12px 7px 10px; border-radius: 8px; font: 600 13px/1 "Segoe UI", system-ui, sans-serif;
         color: #f0f0f0; background: rgba(32, 32, 32, 0.92); border: 1px solid rgba(255, 255, 255, 0.14);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); transition: background 120ms ease;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); transition: background-color 120ms ease, border-color 120ms ease;
+        animation: dsm-in 140ms ease-out;
       }
-      button:hover { background: #15803d; }
+      button:hover { background: #15803d; border-color: #15803d; }
       button:focus-visible { outline: 2px solid #4c91ff; outline-offset: 2px; }
-      svg { width: 16px; height: 16px; fill: none; stroke: #4ade80; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-      button:hover svg { stroke: #fff; }
-      button[data-tone="ok"] { background: #15803d; }
-      button[data-tone="warn"] { background: #a16207; }
-      button[data-tone="error"] { background: #b91c1c; }
+      svg { display: none; flex: none; width: 16px; height: 16px; fill: none; stroke: #4ade80; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+      button:not([data-tone]) .download, [data-tone="busy"] .busy, [data-tone="ok"] .done,
+      [data-tone="warn"] .alert, [data-tone="error"] .alert { display: block; }
+      button:hover svg, button[data-tone] svg { stroke: #fff; }
+      button[data-tone="busy"] { cursor: progress; }
+      button[data-tone="ok"] { background: #15803d; border-color: #15803d; }
+      button[data-tone="warn"] { background: #a16207; border-color: #a16207; }
+      button[data-tone="error"] { background: #b91c1c; border-color: #b91c1c; }
+      .busy { animation: dsm-spin 800ms linear infinite; }
+      @keyframes dsm-in { from { opacity: 0; transform: translateY(-3px); } }
+      @keyframes dsm-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { button, .busy { animation: none; } }
     </style>
     <button type="button" title="Download with Download Speed Manager">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      <svg class="download" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      <svg class="busy" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9"/></svg>
+      <svg class="done" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+      <svg class="alert" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16.5h.01"/></svg>
       <span>Download video</span>
     </button>`;
   const button = shadow.querySelector("button");
@@ -62,11 +73,16 @@
     return (media.find((m) => m.type.startsWith(video instanceof HTMLAudioElement ? "audio" : "video")) ?? media[0])?.url ?? null;
   }
 
+  // Top right of the video, 12px in. The right edge stays put, so a longer label grows to the left,
+  // and the whole button stays on screen.
   function place() {
     if (!current?.isConnected) return hide();
     const r = current.getBoundingClientRect();
-    host.style.cssText = `all: initial; position: fixed; z-index: 2147483647; top: ${Math.max(6, r.top + 12)}px; left: ${Math.max(6, Math.min(window.innerWidth - 190, r.right - 182))}px;`;
+    host.style.cssText = `all: initial; position: fixed; z-index: 2147483647; top: ${Math.max(6, r.top + 12)}px; left: 0;`;
     if (!host.isConnected) document.documentElement.appendChild(host);
+    const width = button.offsetWidth;
+    const viewport = Math.min(window.innerWidth, document.documentElement.clientWidth || window.innerWidth);
+    host.style.left = `${Math.max(6, Math.min(viewport - width - 6, r.right - width - 12))}px`;
   }
 
   function hide() {
@@ -116,20 +132,26 @@
     return `${title || "video"}.mp4`;
   }
 
+  // Show a state on the button: "busy" until the app answers, then "ok" or "error" for a moment.
   function flash(text, tone) {
     label.textContent = text;
     button.dataset.tone = tone;
     clearTimeout(resetTimer);
-    resetTimer = setTimeout(() => {
-      label.textContent = "Download video";
-      button.removeAttribute("data-tone");
-    }, 2500);
+    if (tone !== "busy") {
+      resetTimer = setTimeout(() => {
+        label.textContent = "Download video";
+        button.removeAttribute("data-tone");
+        if (current) place();
+      }, 2500);
+    }
+    if (current) place();
   }
 
   button.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!currentUrl) return;
+    if (!currentUrl || button.dataset.tone === "busy") return;
+    flash("Sending…", "busy");
     const reply = await chrome.runtime
       .sendMessage({ type: "download", url: currentUrl, referrer: location.href, fileName: fileName(currentUrl) })
       .catch((err) => ({ ok: false, error: String(err) }));

@@ -1,17 +1,29 @@
+/* Status colours follow the app-wide convention: green = running or done, yellow = paused or
+   waiting, red = failed or destructive, blue = brand and selection. The *-text shades are the
+   ones that stay readable (WCAG AA) as small text on panels and tinted badges. */
 :root {
   --bg: #f5f6f8;
   --panel: #ffffff;
   --text: #1c2330;
   --muted: #667085;
   --border: #dfe3ea;
-  --accent: #2563eb;
-  --accent-text: #ffffff;
-  --done: #16a34a;
-  --warn: #d97706;
-  --danger: #dc2626;
+  --border-strong: #c4cbd6;
+  --hover: #f0f2f6;
   --track: #e8ebf0;
-  --fill: #3b82f6;
-  --fill-done: #22c55e;
+  --accent: #2563eb;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --on-primary: #ffffff;
+  --ok: #16a34a;
+  --ok-text: #13703a;
+  --warn: #ca8a04;
+  --warn-text: #8a5a00;
+  --danger: #dc2626;
+  --danger-text: #b91c1c;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --content: 1100px;
+  --gutter: 24px;
   color-scheme: light;
 }
 
@@ -22,91 +34,153 @@
     --text: #e6e9ee;
     --muted: #8b95a5;
     --border: #2a323d;
-    --accent: #3b82f6;
+    --border-strong: #3b4553;
+    --hover: #1e2630;
     --track: #232b36;
-    --fill: #60a5fa;
-    --fill-done: #4ade80;
+    --accent: #4c91ff;
+    --ok: #4ade80;
+    --ok-text: #4ade80;
+    --warn: #facc15;
+    --warn-text: #facc15;
+    --danger: #f87171;
+    --danger-text: #f87171;
     color-scheme: dark;
   }
 }
 
-* { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font: 14px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .sr-only {
-  position: absolute; width: 1px; height: 1px; overflow: hidden;
-  clip: rect(0 0 0 0); white-space: nowrap;
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
 }
 
+/* ---- Top bar: lined up with the content column on wide screens ---- */
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--border);
+  padding: 12px max(var(--gutter), calc((100% - var(--content)) / 2 + var(--gutter)));
+  background: var(--panel); border-bottom: 1px solid var(--border);
 }
-.brand { display: flex; align-items: center; gap: 10px; }
-.brand h1 { margin: 0; font-size: 17px; font-weight: 600; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand h1 {
+  margin: 0; font-size: 17px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .logo {
-  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px;
-  background: var(--accent); color: var(--accent-text); font-size: 17px; font-weight: 700;
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px;
+  background: var(--primary); color: var(--on-primary);
 }
-.totals { display: flex; gap: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.logo svg { display: block; }
+.totals { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 #total-speed { font-weight: 600; }
 
-main { max-width: 1100px; margin: 0 auto; padding: 20px 24px 40px; }
+main { max-width: var(--content); margin: 0 auto; padding: 20px var(--gutter) 40px; }
 
+/* ---- Add form and settings ---- */
 .add-form, .settings {
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
-  padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
 }
 .settings { margin-top: 12px; }
-#add-url { flex: 1 1 320px; }
+#add-url { flex: 1 1 320px; min-width: 0; }
 
 input, select, button { font: inherit; color: inherit; }
 input, select {
-  height: 34px; padding: 0 10px; background: var(--bg);
-  border: 1px solid var(--border); border-radius: 7px;
+  height: 34px; padding: 0 10px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  transition: border-color 0.12s ease;
 }
-input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input::placeholder { color: var(--muted); opacity: 1; }
+input:hover, select:hover { border-color: var(--border-strong); }
+input[aria-invalid="true"] { border-color: var(--danger); outline-color: var(--danger); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus-visible, select:focus-visible { outline-offset: 1px; }
 
-.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
-.field input, .field select { color: var(--text); font-size: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+.field input, .field select { font-size: 14px; }
 .field.grow { flex: 1 1 260px; }
 #set-limit, #set-concurrent { width: 150px; }
 
 button {
-  height: 34px; padding: 0 14px; cursor: pointer;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 34px; padding: 0 14px; cursor: pointer; white-space: nowrap;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
-button:hover { border-color: var(--muted); }
-button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+button:not(:disabled, [aria-disabled="true"]):hover { background: var(--hover); border-color: var(--border-strong); }
+button.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+button.primary:not(:disabled, [aria-disabled="true"]):hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Busy while a request is in flight; aria-disabled (unlike disabled) keeps keyboard focus on the button.
+   The dimming waits a moment so quick requests don't make the button flash. */
+button[aria-disabled="true"] { opacity: 0.55; cursor: progress; transition: opacity 0.15s ease 0.2s; }
 
-.list-head { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 0 8px; }
-.list-head h2 { margin: 0; font-size: 15px; }
+/* ---- Messages ---- */
 .muted { color: var(--muted); }
-.error { color: var(--danger); margin: 8px 0 0; }
-.empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: 10px; }
+.error { margin: 8px 0 0; color: var(--danger-text); overflow-wrap: anywhere; }
+#form-error {
+  margin-top: 12px; padding: 8px 12px; border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
 
-.downloads { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.download { padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+/* ---- Download list ---- */
+.list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 24px 0 10px; }
+.list-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.conn-state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); text-align: right; }
+.conn-state::before {
+  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn);
+}
+[data-connection="live"] .conn-state::before { background: var(--ok); }
+
+.empty {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 32px 24px; text-align: center; color: var(--muted);
+  border: 1px dashed var(--border-strong); border-radius: var(--radius);
+}
+.empty-icon {
+  box-sizing: content-box; width: 24px; height: 24px; padding: 10px; margin-bottom: 6px;
+  border-radius: 50%; color: var(--accent); background: var(--track);
+}
+.empty p { margin: 0; }
+.empty-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.empty-text { max-width: 46ch; }
+
+.downloads {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
+  transition: opacity 0.2s ease;
+}
+/* While the app is unreachable the numbers are stale; say so visually. */
+[data-connection="offline"] .downloads,
+[data-connection="offline"] .totals { opacity: 0.6; }
+.download { min-width: 0; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
 
 .row-top, .row-bottom { display: flex; align-items: center; gap: 12px; }
 .row-top { justify-content: space-between; margin-bottom: 8px; }
-.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status {
-  flex: none; padding: 1px 8px; border-radius: 999px; font-size: 12px;
-  background: var(--track); color: var(--muted); text-transform: capitalize;
+  flex: none; padding: 1px 8px; border: 1px solid transparent; border-radius: 999px;
+  font-size: 12px; font-weight: 600; text-transform: capitalize;
+  color: var(--tone-text, var(--muted));
+  background: var(--track);
+  background: color-mix(in srgb, var(--tone, var(--muted)) 12%, var(--panel));
 }
-.status[data-status="downloading"], .status[data-status="connecting"] { color: var(--accent); }
-.status[data-status="completed"] { color: var(--done); }
-.status[data-status="paused"], .status[data-status="queued"] { color: var(--warn); }
-.status[data-status="error"] { color: var(--danger); }
+.download[data-tone="ok"] { --tone: var(--ok); --tone-text: var(--ok-text); }
+.download[data-tone="warn"] { --tone: var(--warn); --tone-text: var(--warn-text); }
+.download[data-tone="danger"] { --tone: var(--danger); --tone-text: var(--danger-text); }
 
-.map { display: block; width: 100%; height: 14px; border-radius: 4px; background: var(--track); }
+.map { display: block; width: 100%; height: 12px; border-radius: 6px; background: var(--track); }
 
 .row-bottom {
   flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--muted);
@@ -117,12 +191,38 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .eta { min-width: 80px; }
 .actions { margin-left: auto; display: flex; gap: 6px; }
 .actions button { height: 28px; padding: 0 10px; font-size: 13px; }
+.actions :is([data-action="cancel"], [data-action="remove"]):not([aria-disabled="true"]):hover {
+  color: var(--danger-text);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+}
+.row-error { font-size: 13px; }
 
 @media (max-width: 640px) {
-  .topbar, main { padding-left: 16px; padding-right: 16px; }
+  :root { --gutter: 16px; }
   .brand h1 { font-size: 15px; }
   #total-active { display: none; }
+  .add-form, .settings { padding: 12px; }
   #set-limit, #set-concurrent { width: 100%; }
   .field { flex: 1 1 140px; }
-  .actions { margin-left: 0; width: 100%; }
+  /* Phones can't hover for the full name, so let it use two lines. */
+  .row-top { align-items: flex-start; }
+  .name {
+    white-space: normal; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  }
+  .row-bottom { gap: 2px 12px; }
+  .row-bottom > span:empty { display: none; }
+  .sizes, .speed, .eta { min-width: 0; }
+  .actions { margin: 6px 0 0; width: 100%; }
+  .actions button { flex: 1 1 0; height: 36px; }
+}
+
+/* High-contrast themes drop the track background; outline the bar so its extent stays visible. */
+@media (forced-colors: active) {
+  .map { border: 1px solid CanvasText; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; }
 }

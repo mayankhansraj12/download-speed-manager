@@ -5,6 +5,9 @@ let links = []; // { url, name, category }
 let filter = "Files";
 const checked = new Set();
 let source = { title: "", url: "" };
+const params = new URLSearchParams(location.search);
+const selectionOnly = params.get("selection") === "1";
+let readFailed = false;
 
 /** Runs inside the page (all frames): links and media sources, optionally only within the selection. */
 function collectLinks(selectionOnly) {
@@ -87,9 +90,29 @@ function renderRows() {
     });
     body.append(tr);
   }
-  $("empty").hidden = rows.length > 0;
+  showEmpty(rows.length);
   updateFooter();
 }
+
+/** When nothing is listed, say why, and offer every link when the "All files" filter hides them all. */
+function showEmpty(shown) {
+  $("empty").hidden = shown > 0;
+  if (shown > 0) return;
+  const query = $("search").value.trim();
+  const widen = !readFailed && !query && filter !== "Everything" && links.length > 0;
+  $("empty-text").textContent = readFailed ? "No links to show."
+    : !links.length ? (selectionOnly ? "The selection has no links." : "This page has no links.")
+    : query ? `No links match “${query}”.`
+    : "None of the links here point to a file.";
+  $("show-all").hidden = !widen;
+  $("show-all").textContent = links.length === 1 ? "Show the link" : `Show all ${links.length} links`;
+}
+
+$("show-all").addEventListener("click", () => {
+  filter = "Everything";
+  renderFilters();
+  renderRows();
+});
 
 function selectedVisible() {
   return visible().filter((link) => checked.has(link.url));
@@ -127,9 +150,7 @@ $("download").addEventListener("click", async () => {
 });
 
 (async () => {
-  const params = new URLSearchParams(location.search);
   const tabId = Number(params.get("tab"));
-  const selectionOnly = params.get("selection") === "1";
   try {
     const results = await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func: collectLinks, args: [selectionOnly] });
     const seen = new Set();
@@ -147,11 +168,14 @@ $("download").addEventListener("click", async () => {
         if (category !== "Other") checked.add(url); // files are picked by default, pages are not
       }
     }
-    $("source").textContent = `${links.length} links ${selectionOnly ? "in the selection on" : "on"} “${source.title || source.url}”`;
+    const count = `${links.length} ${links.length === 1 ? "link" : "links"}`;
+    $("source").textContent = `${count} ${selectionOnly ? "in the selection on" : "on"} “${source.title || source.url}”`;
   } catch (err) {
+    readFailed = true;
     $("source").className = "error";
     $("source").textContent = `Couldn't read that page: ${err.message}`;
   }
+  $("source").title = $("source").textContent; // the line is cut short when the page title is long
   renderFilters();
   renderRows();
 })();

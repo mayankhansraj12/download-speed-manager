@@ -51,7 +51,8 @@ internal sealed class OptionsForm : Form
         };
         _theme.Items.AddRange(Themes);
         _folder.Width = LogicalToDeviceUnits(330);
-        var folderRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+        _folder.Margin = new Padding(0, 4, 0, 0); // centred on the taller button
+        var folderRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
         folderRow.Controls.AddRange([_folder, UiKit.Button("Browse…", (_, _) => Browse())]);
 
         AddSection(nav, "General", Glyphs.Settings, Page(_startup, _clipboard, _progress, _completed, _tray,
@@ -74,9 +75,15 @@ internal sealed class OptionsForm : Form
             await shell.CheckForUpdatesNowAsync();
             _updateStatus.Text = UpdateStatus(shell);
         });
-        AddSection(nav, "Updates", Glyphs.Download, Page(_checkUpdates, Row("How often to check", _interval), _autoInstall,
+        var intervalRow = Row("How often to check", _interval);
+        AddSection(nav, "Updates", Glyphs.Download, Page(_checkUpdates, intervalRow, _autoInstall,
             _updateStatus, checkNow, Note(UpdateSource())));
-        _checkUpdates.CheckedChanged += (_, _) => _autoInstall.Enabled = _interval.Enabled = _checkUpdates.Checked;
+        void UpdateEnabled()
+        {
+            _autoInstall.Enabled = _interval.Enabled = _checkUpdates.Checked;
+            intervalRow.Controls[0].ForeColor = _checkUpdates.Checked ? Theme.Text : Theme.Muted; // the caption dims with its field
+        }
+        _checkUpdates.CheckedChanged += (_, _) => UpdateEnabled();
         Select((int)tab);
 
         _startup.Checked = _settings.LaunchOnStartup;
@@ -94,7 +101,7 @@ internal sealed class OptionsForm : Form
         _browser.Checked = _settings.BrowserIntegration;
         _checkUpdates.Checked = _settings.CheckForUpdates;
         _autoInstall.Checked = _settings.AutoInstallUpdates;
-        _autoInstall.Enabled = _interval.Enabled = _checkUpdates.Checked;
+        UpdateEnabled();
         _interval.SelectedIndex = Math.Max(0, Array.FindIndex(Intervals, i => i.Hours >= _settings.UpdateCheckHours));
         _updateStatus.Text = UpdateStatus(shell);
         foreach (var (browser, registered) in BrowserIntegration.Status())
@@ -110,9 +117,11 @@ internal sealed class OptionsForm : Form
 
         var ok = UiKit.Button("OK", (_, _) => Save());
         var cancel = UiKit.Button("Cancel", (_, _) => Close());
+        // Docking runs from the last control added: the navigation pane takes the full height,
+        // and the buttons sit under the page.
         Controls.Add(_pages);
-        Controls.Add(nav);
         Controls.Add(UiKit.ButtonRow(cancel, ok));
+        Controls.Add(nav);
         AcceptButton = ok;
         CancelButton = cancel;
     }
@@ -136,10 +145,20 @@ internal sealed class OptionsForm : Form
         };
         button.FlatAppearance.BorderSize = 0;
         button.FlatAppearance.CheckedBackColor = Theme.Selected;
-        button.FlatAppearance.MouseOverBackColor = Theme.Hover;
+        button.FlatAppearance.MouseOverBackColor = Theme.NavHover;
+        button.FlatAppearance.MouseDownBackColor = Theme.Selected;
+        // The selected section looks like the main window's sidebar: accent marker and accent icon.
+        button.Paint += (_, e) =>
+        {
+            if (!button.Checked) return;
+            using var marker = new SolidBrush(Theme.Accent);
+            var height = button.Height / 2;
+            e.Graphics.FillRectangle(marker, 0, (button.Height - height) / 2, LogicalToDeviceUnits(3), height);
+        };
         var index = _sections.Count;
         button.CheckedChanged += (_, _) =>
         {
+            button.Image = Glyphs.Render(glyph, LogicalToDeviceUnits(16), button.Checked ? Theme.Accent : null);
             if (button.Checked) Select(index);
         };
         page.Visible = false;

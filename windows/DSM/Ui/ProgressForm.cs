@@ -17,9 +17,10 @@ internal sealed class ProgressForm : Form
     private readonly Meter _bar = new() { Dock = DockStyle.Fill };
     private readonly SegmentBar _map = new() { Dock = DockStyle.Fill };
     private readonly SmoothListView _connections = new();
-    private readonly CheckBox _limitOn = new() { Text = "Limit this download to", AutoSize = true };
+    private readonly Panel _connectionsFrame = new() { Dock = DockStyle.Fill, Visible = false, Padding = new Padding(1) };
+    private readonly CheckBox _limitOn = new() { Text = "Limit this download to", AutoSize = true, Margin = new Padding(0, 3, 3, 3) };
     private readonly NumericUpDown _limit = new() { Minimum = 16, Maximum = 1_000_000, Increment = 64, Width = 90 };
-    private readonly CheckBox _closeWhenDone = new() { Text = "Close this window when the download finishes", AutoSize = true, Checked = true };
+    private readonly CheckBox _closeWhenDone = new() { Text = "Close this window when the download finishes", AutoSize = true, Checked = true, Margin = new Padding(0, 3, 3, 3) };
     private readonly Button _pause;
     private readonly Button _stop;
     private readonly Button _openFolder;
@@ -53,7 +54,13 @@ internal sealed class ProgressForm : Form
         var grid = UiKit.Grid(0, 100);
         void Row(string caption, Label value)
         {
-            grid.Controls.Add(UiKit.Caption(caption, muted: true));
+            // Long errors wrap instead of widening the window, with the caption beside their first line.
+            value.MaximumSize = new Size(LogicalToDeviceUnits(420), 0);
+            value.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+            value.Margin = new Padding(0, 7, 0, 7);
+            var label = UiKit.Caption(caption, muted: true);
+            label.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+            grid.Controls.Add(label);
             grid.Controls.Add(value);
         }
         Row("Status", _status);
@@ -73,18 +80,20 @@ internal sealed class ProgressForm : Form
 
         _connections.View = View.Details;
         _connections.FullRowSelect = true;
-        _connections.Height = LogicalToDeviceUnits(150);
         _connections.Dock = DockStyle.Fill;
-        _connections.Visible = false;
         _connections.Columns.Add("#", LogicalToDeviceUnits(36));
         _connections.Columns.Add("Downloaded", LogicalToDeviceUnits(130), HorizontalAlignment.Right);
         _connections.Columns.Add("Speed", LogicalToDeviceUnits(110), HorizontalAlignment.Right);
         _connections.Columns.Add("State", LogicalToDeviceUnits(170));
-        Theme.StyleList(_connections);
-        _connections.BorderStyle = BorderStyle.FixedSingle;
-        _connections.DrawSubItem += DrawConnectionState; // runs after StyleList's default handler
-        grid.Controls.Add(_connections);
-        grid.SetColumnSpan(_connections, 2);
+        // State column: green while receiving, yellow while connecting or waiting to retry.
+        Theme.StyleList(_connections, (row, column) =>
+            column != 3 ? null : row.SubItems[3].Text == "Receiving data" ? Theme.SuccessText : Theme.WarningText);
+        _connectionsFrame.BackColor = Theme.Border; // a 1px frame in theme colours around the list
+        _connectionsFrame.Height = LogicalToDeviceUnits(150);
+        _connectionsFrame.Margin = new Padding(0, 0, 0, 6);
+        _connectionsFrame.Controls.Add(_connections);
+        grid.Controls.Add(_connectionsFrame);
+        grid.SetColumnSpan(_connectionsFrame, 2);
 
         var limitRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 6, 0, 0) };
         limitRow.Controls.AddRange([_limitOn, _limit, UiKit.Caption("KB/s", muted: true)]);
@@ -171,17 +180,6 @@ internal sealed class ProgressForm : Form
         _ => TaskbarState.None,
     };
 
-    /// <summary>Connection state column: green while receiving, yellow while connecting or waiting to retry.</summary>
-    private void DrawConnectionState(object? sender, DrawListViewSubItemEventArgs e)
-    {
-        if (e.ColumnIndex != 3 || e.SubItem is null) return;
-        e.DrawDefault = false;
-        using (var back = new SolidBrush(e.Item?.Selected == true ? Theme.Selected : _connections.BackColor)) e.Graphics.FillRectangle(back, e.Bounds);
-        var color = e.SubItem.Text == "Receiving data" ? Theme.SuccessText : Theme.WarningText;
-        TextRenderer.DrawText(e.Graphics, e.SubItem.Text, _connections.Font, Rectangle.Inflate(e.Bounds, -4, 0), color,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-    }
-
     private void RefreshConnections(DownloadItem d)
     {
         var rows = d.SnapshotConnections();
@@ -212,8 +210,8 @@ internal sealed class ProgressForm : Form
 
     public void ToggleConnections()
     {
-        _connections.Visible = !_connections.Visible;
-        _details.Text = _connections.Visible ? "Hide connections" : "Show connections";
+        _connectionsFrame.Visible = !_connectionsFrame.Visible;
+        _details.Text = _connectionsFrame.Visible ? "Hide connections" : "Show connections";
         ShowState(_item);
     }
 

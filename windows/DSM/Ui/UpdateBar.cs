@@ -8,6 +8,7 @@ internal sealed class UpdateBar : Panel
     private readonly Button _install;
     private readonly Button _notes;
     private readonly Button _later;
+    private Color _stripe = Theme.Success; // left edge: green available, yellow important, red failed
 
     public UpdateBar()
     {
@@ -42,7 +43,8 @@ internal sealed class UpdateBar : Panel
 
     public void ShowAvailable(string version, string current, bool required, bool portable)
     {
-        _icon.Image = Glyphs.Render(Glyphs.Download, LogicalToDeviceUnits(20), required ? Theme.Warning : Theme.Success);
+        SetStripe(required ? Theme.Warning : Theme.Success);
+        _icon.Image = Glyphs.Render(Glyphs.Download, LogicalToDeviceUnits(20), _stripe);
         _text.ForeColor = Theme.Text;
         _text.Text = required
             ? $"Important update: version {version} fixes problems in version {current}."
@@ -55,6 +57,8 @@ internal sealed class UpdateBar : Panel
 
     public void ShowProgress(string text)
     {
+        SetStripe(Theme.Success); // running fine (also after "Try again" replaced an error)
+        _icon.Image = Glyphs.Render(Glyphs.Download, LogicalToDeviceUnits(20), Theme.Success);
         _text.ForeColor = Theme.Text;
         _text.Text = text;
         _install.Enabled = _later.Enabled = false;
@@ -63,6 +67,7 @@ internal sealed class UpdateBar : Panel
 
     public void ShowError(string text)
     {
+        SetStripe(Theme.Danger);
         _icon.Image = Glyphs.Render(Glyphs.Info, LogicalToDeviceUnits(20), Theme.Danger);
         _text.ForeColor = Theme.DangerText;
         _text.Text = text;
@@ -71,10 +76,17 @@ internal sealed class UpdateBar : Panel
         Visible = true;
     }
 
+    private void SetStripe(Color color)
+    {
+        if (_stripe == color) return;
+        _stripe = color;
+        Invalidate();
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        using var accent = new SolidBrush(Theme.Success);
+        using var accent = new SolidBrush(_stripe);
         e.Graphics.FillRectangle(accent, 0, 0, LogicalToDeviceUnits(3), Height);
         using var line = new Pen(Theme.Border);
         e.Graphics.DrawLine(line, 0, Height - 1, Width, Height - 1);

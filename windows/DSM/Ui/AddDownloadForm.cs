@@ -30,6 +30,7 @@ internal sealed class AddDownloadForm : Form
         var width = LogicalToDeviceUnits(460);
         _url.Width = width;
         _name.Width = width;
+        _info.MaximumSize = new Size(width, 0); // a long error wraps instead of widening the dialog
         _folder.Width = width - LogicalToDeviceUnits(100);
         _category.Items.AddRange(Categories.All);
         _connections.Value = Math.Clamp(prefill.Connections ?? settings.DefaultConnections, 1, 32);

@@ -16,18 +16,18 @@
 
     <section>
       <label for="fileTypes"><strong>Catch these file types</strong></label>
-      <p class="muted">Downloads of these types go to Download Speed Manager. Links with no visible type, which is common on file-hosting sites, are caught as well. Other known types stay in the browser.</p>
-      <textarea id="fileTypes" rows="4" spellcheck="false"></textarea>
+      <p id="fileTypes-help" class="muted">Downloads of these types go to Download Speed Manager. Links with no visible type, which is common on file-hosting sites, are caught as well. Other known types stay in the browser.</p>
+      <textarea id="fileTypes" rows="4" spellcheck="false" aria-describedby="fileTypes-help"></textarea>
     </section>
 
     <section class="row">
       <label for="minSizeKb"><strong>Leave files smaller than</strong></label>
-      <input id="minSizeKb" type="number" min="0" step="64"> <span class="muted">KB to the browser (0 = catch every size)</span>
+      <input id="minSizeKb" type="number" min="0" step="64" aria-describedby="minSizeKb-help"> <span id="minSizeKb-help" class="muted">KB to the browser (0 = catch every size)</span>
     </section>
 
     <section class="row">
       <label for="localPort"><strong>Local server port</strong></label>
-      <input id="localPort" type="number" min="1" max="65535"> <span class="muted">only used by the cross-platform (Node.js) version</span>
+      <input id="localPort" type="number" min="1" max="65535" aria-describedby="localPort-help"> <span id="localPort-help" class="muted">only used by the cross-platform (Node.js) version</span>
     </section>
 
     <section>

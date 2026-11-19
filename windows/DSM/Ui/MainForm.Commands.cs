@@ -95,13 +95,42 @@ internal sealed partial class MainForm
             Button("Options", Glyphs.Settings, (_, _) => _shell.ShowOptions()),
         ]);
 
-        _search.Alignment = ToolStripItemAlignment.Right;
-        _search.AutoSize = false;
-        _search.Width = LogicalToDeviceUnits(220);
-        _search.TextBox.PlaceholderText = "Search downloads";
-        _search.BorderStyle = BorderStyle.FixedSingle;
         _search.TextChanged += (_, _) => MarkDirty();
-        _toolbar.Items.Add(_search);
+        _search.ResultsRequested += (_, _) =>
+        {
+            _list.Focus();
+            if (_list.SelectedItems.Count > 0 || _list.Items.Count == 0) return;
+            _list.Items[0].Selected = true;
+            _list.Items[0].Focused = true;
+        };
+        var host = new ToolStripControlHost(_search)
+        {
+            Alignment = ToolStripItemAlignment.Right,
+            AutoSize = false,
+            Size = new Size(LogicalToDeviceUnits(250), LogicalToDeviceUnits(30)),
+            Margin = new Padding(0, 0, LogicalToDeviceUnits(2), 0),
+        };
+        _toolbar.Items.Add(host);
+        // The search box narrows before the toolbar runs out of room, so nothing moves into an overflow menu.
+        _toolbar.Resize += (_, _) =>
+        {
+            var buttons = _toolbar.Items.Cast<ToolStripItem>().Where(i => i != host).Sum(i => i.Width + i.Margin.Horizontal);
+            var free = _toolbar.DisplayRectangle.Width - buttons - host.Margin.Horizontal - LogicalToDeviceUnits(16);
+            var width = Math.Clamp(free, LogicalToDeviceUnits(120), LogicalToDeviceUnits(250));
+            if (host.Width == width) return;
+            host.Width = width;
+            _toolbar.PerformLayout(); // an item already in the overflow menu would only re-lay out that menu
+        };
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.F))
+        {
+            _search.FocusText();
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private void BuildRowMenu()

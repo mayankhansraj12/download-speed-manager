@@ -9,6 +9,30 @@ command line), MINOR for new features, PATCH for fixes.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-19
+
+### Changed
+
+- A polished look across the app, installer, browser extension and web interface: clearer selection,
+  hover and focus states, rounded controls, brand-blue buttons with readable contrast, and consistent
+  spacing in the dark and light themes.
+- Main window: a themed search box (Ctrl+F to search, Esc to clear), readable selected rows, full dates,
+  long names shortened in the middle so the extension stays visible, and helpful messages when a list is
+  empty.
+- Setup: full keyboard support (Enter, Esc and Alt shortcuts), clearer notices, and layouts that scale
+  properly on high-DPI screens.
+- Browser extension: restyled status and update banner, a link picker that keeps its header and
+  Download bar in view, and clearer empty states and errors.
+- Web interface: no sideways scrolling on phones, keyboard focus is kept after actions, and states are
+  colour-coded the same way as in the app.
+
+### Fixed
+
+- Pressing Enter on the first page of setup closed it instead of moving on.
+- A double-click on Download in the web interface added the download twice.
+- In the extension, a long file name pushed the popup's Download buttons out of view, and the
+  "Download video" button could spill past the edge of the video.
+
 ## [1.1.0] - 2026-11-19
 
 ### Added

@@ -41,12 +41,13 @@ const $ = (id) => document.getElementById(id);
     empty.textContent = "None found yet. Videos that are downloadable as one file appear here once they start playing.";
     list.append(empty);
   }
-  for (const media of status.media) {
+  status.media.forEach((media, index) => {
     const item = document.createElement("li");
     const info = document.createElement("span");
     info.className = "info";
     const name = document.createElement("span");
     name.className = "name";
+    name.id = `media-name-${index}`;
     name.textContent = DSM.nameFromUrl(media.url) || media.url;
     name.title = media.url;
     const meta = document.createElement("span");
@@ -56,16 +57,20 @@ const $ = (id) => document.getElementById(id);
     const send = document.createElement("button");
     send.className = "go";
     send.textContent = "Download";
+    send.setAttribute("aria-describedby", name.id);
     send.addEventListener("click", async () => {
       send.disabled = true;
+      send.textContent = "Sending…";
       const reply = await chrome.runtime.sendMessage({ type: "download", url: media.url, referrer: tab?.url });
-      send.textContent = reply.ok ? "Sent" : "Failed";
+      // Sent: done. Failed: say why and let the user try again (for example after starting the app).
+      send.textContent = reply.ok ? "Sent" : "Try again";
+      send.disabled = reply.ok;
       meta.textContent = reply.ok ? "Sent to Download Speed Manager" : reply.error;
       meta.className = `meta ${reply.ok ? "ok" : "error"}`;
     });
     item.append(info, send);
     list.append(item);
-  }
+  });
 
   const canPick = DSM.isHttp(tab?.url);
   $("links").disabled = !canPick;

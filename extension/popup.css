@@ -1,22 +1,27 @@
-body { width: 350px; padding: 14px 16px 12px; }
+body { width: 350px; padding: 14px 16px; }
 header { display: flex; align-items: center; gap: 10px; font-size: 15px; margin-bottom: 12px; }
-.hint { margin: 8px 0 0; font-size: 12px; }
+.hint { margin: 8px 0 0; font-size: 12px; text-wrap: pretty; }
 section { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
-.media { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
-.media li { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; background: var(--panel); }
-.media li.empty { background: none; padding: 0; color: var(--muted); }
+/* minmax(0, 1fr): a long file name is cut short instead of pushing the Download buttons out of view. */
+.media { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.media li { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.media li.empty { display: block; padding: 10px 12px; border: 1px dashed var(--field-border); background: none; color: var(--muted); font-size: 12px; text-wrap: pretty; }
 .media .info { flex: 1; min-width: 0; }
 .media .name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.media .meta { font-size: 12px; color: var(--muted); }
-.media button { padding: 5px 10px; flex: none; }
+.media .meta { display: block; font-size: 12px; color: var(--muted); }
+.media .meta.ok { color: var(--green); }
+.media .meta.error { color: var(--red); }
+.media button { flex: none; min-width: 84px; padding: 5px 10px; }
 .wide { width: 100%; }
-footer { margin-top: 12px; font-size: 12px; }
+footer { margin-top: 12px; font-size: 12px; text-wrap: pretty; }
 .update {
-  display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 10px; border-radius: 8px;
-  border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 10px 9px 12px; border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) var(--tint), var(--bg));
 }
 .update[hidden] { display: none; }
 .update-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .update-text span, .update-text a { font-size: 12px; }
+.update-text a { justify-self: start; }
 .update button { flex: none; padding: 5px 12px; }
 .footer-links { margin-top: 4px; }

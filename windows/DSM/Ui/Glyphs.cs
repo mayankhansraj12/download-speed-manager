@@ -30,6 +30,8 @@ internal static class Glyphs
     public const char Link = '';
     public const char Copy = '';
     public const char Info = '';
+    public const char Search = '';
+    public const char Cancel = '';
 
     private static readonly Dictionary<(char, int, int), Bitmap> Cache = [];
     private static readonly string FontName = InstalledFont("Segoe Fluent Icons") ?? "Segoe MDL2 Assets";

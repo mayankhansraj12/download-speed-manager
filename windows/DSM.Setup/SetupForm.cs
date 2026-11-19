@@ -7,7 +7,7 @@ internal sealed partial class SetupForm : Form
     private readonly bool _uninstall;
     private readonly Installer.ExistingInstall? _existing;
     private readonly string[] _steps;
-    private readonly FlowLayoutPanel _stepList = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, BackColor = Look.Sidebar };
+    private readonly List<(PictureBox Marker, Label Name)> _stepRows = [];
     private readonly FlowLayoutPanel _page = new()
     {
         Dock = DockStyle.Fill,
@@ -15,16 +15,18 @@ internal sealed partial class SetupForm : Form
         WrapContents = false,
         AutoScroll = true,
         BackColor = Look.Window,
-        Padding = new Padding(32, 28, 24, 8),
+        Padding = Look.Px(32, 28, 16, 8),
     };
-    private readonly Button _back;
-    private readonly Button _next;
-    private readonly Button _cancel;
-    private readonly TextBox _folder = new() { BorderStyle = BorderStyle.FixedSingle, BackColor = Look.Input, ForeColor = Look.Text };
+    private readonly FlatButton _back;
+    private readonly FlatButton _next;
+    private readonly FlatButton _cancel;
+    private readonly TextBox _folder = new() { AccessibleName = "Install to" };
+    private readonly Field _folderField;
+    private readonly FlowLayoutPanel _folderRow = new() { AutoSize = true, WrapContents = false, Margin = Look.Px(0, 0, 0, 8) };
     private readonly Label _folderError = Look.Paragraph("", Look.Danger);
-    private readonly CheckBox _desktop = Check("Create a desktop shortcut", true);
-    private readonly CheckBox _launch = Check("Start Download Speed Manager now", true);
-    private readonly CheckBox _removeData = Check("Also delete my settings and download list", false);
+    private readonly CheckBox _desktop = Check("Create a &desktop shortcut", true);
+    private readonly CheckBox _launch = Check("&Start Download Speed Manager now", true);
+    private readonly CheckBox _removeData = Check("Also &delete my settings and download list", false);
     private readonly Meter _meter = new();
     private readonly Label _status = Look.Paragraph("", Look.Muted);
     private int _step;
@@ -36,7 +38,8 @@ internal sealed partial class SetupForm : Form
     {
         _options = options;
         _uninstall = options.Uninstall;
-        _existing = Installer.FindExisting();
+        // Screenshots for the docs show a clean machine, never this computer's installs or paths.
+        _existing = options.CaptureDir is null ? Installer.FindExisting() : null;
         _steps = _uninstall ? ["Confirm", "Remove", "Finish"] : ["Welcome", "Options", "Install", "Finish"];
 
         Text = _uninstall ? "Uninstall Download Speed Manager" : "Download Speed Manager Setup";
@@ -46,18 +49,30 @@ internal sealed partial class SetupForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Look.Window;
         ForeColor = Look.Text;
-        ClientSize = new Size(LogicalToDeviceUnits(720), LogicalToDeviceUnits(440));
+        ClientSize = Look.Px(720, 440);
 
+        // Folder box and Browse button: one row, the same height, as wide as the text column.
+        var browse = Look.Button("B&rowse…", Look.NeutralFill, (_, _) => Browse());
+        _folderField = new Field(_folder) { Margin = Padding.Empty };
+        _folderField.Width = Look.ContentWidth - browse.Margin.Left - Math.Max(browse.MinimumSize.Width, browse.PreferredSize.Width);
+        _folderRow.Controls.AddRange([_folderField, browse]);
         _folder.Text = options.Folder ?? _existing?.Folder ?? Installer.DefaultFolder;
-        _folder.Width = LogicalToDeviceUnits(320);
+        _folder.TextChanged += (_, _) => ShowFolderError(null);
+        _folderError.Visible = false;
+        _folderError.Margin = Look.Px(0, 0, 0, 8);
         // Updating: keep the user's earlier choice instead of re-adding a shortcut they deleted.
         _desktop.Checked = options.DesktopShortcut ?? (_existing is null || Installer.HasDesktopShortcut);
-        _meter.Size = new Size(LogicalToDeviceUnits(430), LogicalToDeviceUnits(8));
-        _meter.Margin = new Padding(0, 6, 0, 12);
+        _desktop.Margin = Look.Px(0, 6, 0, 10);
+        _meter.Size = new Size(Look.ContentWidth, Look.Px(6));
+        _meter.Margin = Look.Px(0, 8, 0, 12);
 
-        _back = Look.Button("Back", Look.NeutralFill, (_, _) => ShowStep(_step - 1));
-        _next = Look.Button("Next", Look.Accent, (_, _) => Next());
+        _back = Look.Button("&Back", Look.NeutralFill, (_, _) => ShowStep(_step - 1));
+        _next = Look.Button("&Next", Look.AccentFill, (_, _) => Next());
         _cancel = Look.Button("Cancel", Look.NeutralFill, (_, _) => Close());
+        // Tab order follows the buttons as you see them, left to right.
+        _back.TabIndex = 0;
+        _next.TabIndex = 1;
+        _cancel.TabIndex = 2;
         var footer = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
@@ -65,7 +80,9 @@ internal sealed partial class SetupForm : Form
             WrapContents = false,
             AutoSize = true,
             BackColor = Look.Window,
-            Padding = new Padding(16, 12, 20, 16),
+            // Right-to-left flow adds the left padding on the right as well, so it all goes on the right:
+            // 38 = 720 - 210 (sidebar) - 32 (page gutter) - 440 (text column) lines the buttons up with the text.
+            Padding = Look.Px(0, 14, 38, 14),
         };
         footer.Controls.AddRange([_cancel, _next, _back]);
         footer.Paint += (_, e) =>
@@ -89,7 +106,7 @@ internal sealed partial class SetupForm : Form
         Checked = on,
         AutoSize = true,
         ForeColor = Look.Text,
-        Margin = new Padding(0, 4, 0, 8),
+        Margin = Look.Px(0, 2, 0, 10),
     };
 
     private Control BuildSidebar()
@@ -97,46 +114,70 @@ internal sealed partial class SetupForm : Form
         var sidebar = new FlowLayoutPanel
         {
             Dock = DockStyle.Left,
-            Width = LogicalToDeviceUnits(210),
+            Width = Look.Px(210),
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             BackColor = Look.Sidebar,
-            Padding = new Padding(22, 26, 12, 12),
+            Padding = Look.Px(24, 28, 16, 16),
         };
-        var logo = LogicalToDeviceUnits(56);
-        sidebar.Controls.Add(new PictureBox { Image = Look.Logo(logo), Size = new Size(logo, logo), Margin = new Padding(0, 0, 0, 14) });
-        sidebar.Controls.Add(new Label { Text = Installer.AppName, AutoSize = true, ForeColor = Look.Text, Font = new Font("Segoe UI Semibold", 11f), Margin = Padding.Empty });
-        sidebar.Controls.Add(new Label { Text = "Version " + Installer.Version, AutoSize = true, ForeColor = Look.Muted, Margin = new Padding(0, 2, 0, 28) });
-        sidebar.Controls.Add(_stepList);
+        var logo = Look.Px(56);
+        sidebar.Controls.Add(new PictureBox
+        {
+            Image = Look.Logo(logo),
+            Size = new Size(logo, logo),
+            Margin = Look.Px(0, 0, 0, 14),
+            AccessibleRole = AccessibleRole.Graphic,
+            AccessibleName = Installer.AppName,
+        });
+        sidebar.Controls.Add(new Label
+        {
+            Text = Installer.AppName,
+            AutoSize = true,
+            MaximumSize = new Size(sidebar.Width - sidebar.Padding.Horizontal, 0),
+            UseMnemonic = false,
+            ForeColor = Look.Text,
+            Font = Look.BrandFont,
+            Margin = Padding.Empty,
+        });
+        sidebar.Controls.Add(new Label { Text = "Version " + Installer.Version, AutoSize = true, ForeColor = Look.Muted, Margin = Look.Px(0, 2, 0, 24) });
+
+        // One row per step; the marker and the name are centred on the row.
+        var steps = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, BackColor = Look.Sidebar, Margin = Padding.Empty };
+        steps.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        steps.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var marker = Look.Px(16);
+        foreach (var name in _steps)
+        {
+            steps.RowStyles.Add(new RowStyle(SizeType.Absolute, Look.Px(30)));
+            var icon = new PictureBox { Size = new Size(marker, marker), Anchor = AnchorStyles.Left, Margin = Look.Px(0, 0, 10, 0), AccessibleRole = AccessibleRole.Graphic };
+            var label = new Label { Text = name, AutoSize = true, Anchor = AnchorStyles.Left, Margin = Padding.Empty, UseMnemonic = false };
+            steps.Controls.Add(icon);
+            steps.Controls.Add(label);
+            _stepRows.Add((icon, label));
+        }
+        sidebar.Controls.Add(steps);
         return sidebar;
     }
 
-    /// <summary>Finished steps get a green check, the current one a blue dot (red cross if it failed).</summary>
+    /// <summary>Finished steps get a green check, the current one a blue ring (a red cross if it failed), the rest a grey ring.</summary>
     private void RenderSteps()
     {
-        _stepList.SuspendLayout();
-        _stepList.Controls.Clear();
         var last = _steps.Length - 1;
+        var size = Look.Px(16);
         for (var i = 0; i < _steps.Length; i++)
         {
-            var finishedOk = i == last && _step == last && _error is null;
-            var (glyph, color) = i < _step || finishedOk ? (Look.Check, Look.Success)
-                : i == _step ? (_error is not null && i == last ? (Look.Cancel, Look.Danger) : (Look.CircleFill, Look.Accent))
-                : (Look.CircleRing, Look.Muted);
-            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 6), BackColor = Look.Sidebar };
-            var size = LogicalToDeviceUnits(16);
-            row.Controls.Add(new PictureBox { Image = Look.Glyph(glyph, size, color), Size = new Size(size, size), Margin = new Padding(0, 3, 10, 0) });
-            row.Controls.Add(new Label
-            {
-                Text = _steps[i],
-                AutoSize = true,
-                ForeColor = i <= _step ? Look.Text : Look.Muted,
-                Font = new Font(Font, i == _step ? FontStyle.Bold : FontStyle.Regular),
-                Margin = new Padding(0, 2, 0, 0),
-            });
-            _stepList.Controls.Add(row);
+            var (marker, label) = _stepRows[i];
+            var failed = i == last && _step == last && _error is not null;
+            var done = !failed && (i < _step || (i == last && _step == last));
+            var old = marker.Image;
+            marker.Image = failed ? Look.StatusIcon(Tone.Danger, size)
+                : done ? Look.StatusIcon(Tone.Success, size)
+                : Look.Ring(size, i == _step ? Look.Accent : Look.Muted, current: i == _step);
+            marker.AccessibleName = failed ? "Failed" : done ? "Done" : i == _step ? "Current step" : "Not started";
+            old?.Dispose();
+            label.ForeColor = i <= _step ? Look.Text : Look.Muted;
+            label.Font = i == _step ? Look.StrongFont : Font;
         }
-        _stepList.ResumeLayout();
     }
 
     private void ShowStep(int step)
@@ -149,14 +190,27 @@ internal sealed partial class SetupForm : Form
         _page.ResumeLayout();
         RenderSteps();
         UpdateButtons();
+        // Enter and Space act on the page's main button, never on Cancel or on a control that has just gone.
+        if (_next.Enabled) ActiveControl = _next;
     }
 
-    private void Add(Control control) => _page.Controls.Add(control);
-
-    private PictureBox Badge(char glyph, Color color)
+    private void Add(Control control)
     {
-        var size = LogicalToDeviceUnits(44);
-        return new PictureBox { Image = Look.Glyph(glyph, size, color), Size = new Size(size, size), Margin = new Padding(0, 0, 0, 8) };
+        control.TabIndex = _page.Controls.Count; // tab order runs down the page
+        _page.Controls.Add(control);
+    }
+
+    private static PictureBox Badge(Tone tone)
+    {
+        var size = Look.Px(48);
+        return new PictureBox
+        {
+            Image = Look.StatusIcon(tone, size),
+            Size = new Size(size, size),
+            Margin = Look.Px(0, 0, 0, 16), // top in line with the logo in the sidebar
+            AccessibleRole = AccessibleRole.Graphic,
+            AccessibleName = tone == Tone.Success ? "Done" : "Failed",
+        };
     }
 
     private void BuildInstallPage(int step)
@@ -168,19 +222,20 @@ internal sealed partial class SetupForm : Form
                 Add(Look.Paragraph("Fast multi-connection downloads with pause and resume, speed limits, a download queue and browser capture."));
                 Add(Look.Paragraph("Setup installs the app for your Windows account only, so no administrator permission is needed.", Look.Muted));
                 if (_existing is not null)
-                    Add(Look.Paragraph($"Version {_existing.Version ?? "?"} is already installed. Setup will update it and keep your settings and unfinished downloads.", Look.Warning));
-                if (Installer.RunningElsewhere(_folder.Text) is { } other)
-                    Add(Look.Paragraph($"Download Speed Manager is running from {other}. Exit it first (right-click its notification-area icon → Exit), otherwise the new copy will open that one.", Look.Warning));
+                    Add(new Notice(Tone.Info, $"Version {_existing.Version ?? "?"} is already installed. Setup will update it and keep your settings and unfinished downloads."));
+                if (_options.CaptureDir is null && Installer.RunningElsewhere(_folder.Text) is { } other)
+                    Add(new Notice(Tone.Warning, $"Download Speed Manager is running from {other}. Exit it first (right-click its notification-area icon → Exit), otherwise the new copy will open that one."));
                 if (!Installer.HasPayload)
-                    Add(Look.Paragraph("This setup file is incomplete: the app files are missing. Download the setup again.", Look.Danger));
+                    Add(new Notice(Tone.Danger, "This setup file is incomplete: the app files are missing. Download the setup again."));
                 Add(Look.Paragraph("Free software under the MIT License.", Look.Muted));
                 break;
             case 1:
                 Add(Look.Heading("Choose options"));
-                Add(Look.Paragraph("Install to", Look.Muted));
-                var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
-                row.Controls.AddRange([_folder, Look.Button("Browse…", Look.NeutralFill, (_, _) => Browse())]);
-                Add(row);
+                var caption = Look.Paragraph("Install &to", Look.Muted);
+                caption.UseMnemonic = true; // Alt+T moves to the folder box
+                caption.Margin = Look.Px(0, 0, 0, 6);
+                Add(caption);
+                Add(_folderRow);
                 Add(_folderError);
                 Add(_desktop);
                 Add(Look.Paragraph("A Start menu shortcut is always added. You can uninstall any time from Settings → Apps.", Look.Muted));
@@ -193,7 +248,7 @@ internal sealed partial class SetupForm : Form
             default:
                 if (_error is null)
                 {
-                    Add(Badge(Look.Check, Look.Success));
+                    Add(Badge(Tone.Success));
                     Add(Look.Heading("Download Speed Manager is installed"));
                     Add(Look.Paragraph($"Find it in the Start menu. Installed to {_doneFolder}."));
                     Add(Look.Paragraph("Tip: to catch downloads from your browser, open Options → Browser in the app.", Look.Muted));
@@ -201,9 +256,9 @@ internal sealed partial class SetupForm : Form
                 }
                 else
                 {
-                    Add(Badge(Look.Cancel, Look.Danger));
+                    Add(Badge(Tone.Danger));
                     Add(Look.Heading("Setup couldn't finish"));
-                    Add(Look.Paragraph(_error, Look.Danger));
+                    Add(new Notice(Tone.Danger, _error));
                     Add(Look.Paragraph("Close Download Speed Manager if it is open, then run setup again.", Look.Muted));
                 }
                 break;
@@ -218,9 +273,9 @@ internal sealed partial class SetupForm : Form
             case 0:
                 Add(Look.Heading("Remove Download Speed Manager?"));
                 Add(folder is null
-                    ? Look.Paragraph("Download Speed Manager doesn't seem to be installed.", Look.Warning)
+                    ? new Notice(Tone.Warning, "Download Speed Manager doesn't seem to be installed.")
                     : Look.Paragraph($"This removes the app from {folder}, its shortcuts, and its browser connection."));
-                Add(Look.Paragraph("Files you downloaded are never deleted.", Look.Success));
+                Add(new Notice(Tone.Success, "Files you downloaded are never deleted."));
                 Add(_removeData);
                 break;
             case 1:
@@ -231,15 +286,15 @@ internal sealed partial class SetupForm : Form
             default:
                 if (_error is null)
                 {
-                    Add(Badge(Look.Check, Look.Success));
+                    Add(Badge(Tone.Success));
                     Add(Look.Heading("Download Speed Manager was removed"));
                     Add(Look.Paragraph("Your downloaded files are still where you saved them.", Look.Muted));
                 }
                 else
                 {
-                    Add(Badge(Look.Cancel, Look.Danger));
+                    Add(Badge(Tone.Danger));
                     Add(Look.Heading("Uninstall couldn't finish"));
-                    Add(Look.Paragraph(_error, Look.Danger));
+                    Add(new Notice(Tone.Danger, _error));
                 }
                 break;
         }
@@ -251,16 +306,17 @@ internal sealed partial class SetupForm : Form
         _back.Visible = !_uninstall && _step == 1;
         _cancel.Visible = !last;
         _cancel.Enabled = !_busy;
+        // While working, the button keeps the name of what is running (Install, Update, Uninstall), greyed out.
         var (text, fill) = _uninstall
-            ? (_step == 0 ? ("Uninstall", Look.StopFill) : ("Close", Look.Accent))
+            ? (last ? ("&Close", Look.AccentFill) : ("&Uninstall", Look.StopFill))
             : _step switch
             {
-                0 => ("Next", Look.Accent),
-                1 or 2 => (_existing is null ? "Install" : "Update", Look.GoFill),
-                _ => (_error is null ? "Finish" : "Close", _error is null ? Look.GoFill : Look.NeutralFill),
+                0 => ("&Next", Look.AccentFill),
+                1 or 2 => (_existing is null ? "&Install" : "&Update", Look.GoFill),
+                _ => (_error is null ? "&Finish" : "&Close", _error is null ? Look.GoFill : Look.NeutralFill),
             };
         _next.Text = text;
-        Look.Paint(_next, fill);
+        _next.Fill = fill;
         var canStart = _uninstall ? _options.Folder is not null || _existing is not null : Installer.HasPayload;
         _next.Enabled = !_busy && (last || canStart);
     }
@@ -289,8 +345,21 @@ internal sealed partial class SetupForm : Form
     {
         var folder = _folder.Text.Trim();
         var ok = folder.Length > 0 && Path.IsPathFullyQualified(folder) && folder.IndexOfAny(Path.GetInvalidPathChars()) < 0;
-        _folderError.Text = ok ? "" : "Choose a full folder path, for example C:\\Users\\you\\Apps\\Download Speed Manager.";
+        if (!ok)
+        {
+            ShowFolderError("Choose a full folder path, for example C:\\Users\\you\\Apps\\Download Speed Manager.");
+            _folder.Focus();
+            _folder.SelectAll();
+        }
         return ok;
+    }
+
+    /// <summary>The message under the folder box; null hides it (as soon as the folder is edited).</summary>
+    private void ShowFolderError(string? message)
+    {
+        _folderError.Text = message ?? "";
+        _folderError.Visible = message is not null;
+        _folderField.Invalid = message is not null;
     }
 
     private async Task RunAsync()
@@ -338,6 +407,17 @@ internal sealed partial class SetupForm : Form
                 ? chosen
                 : Path.Combine(chosen, Installer.AppName);
         }
+    }
+
+    /// <summary>Esc closes the wizard like the title bar's close button does, but not while it is working.</summary>
+    protected override bool ProcessDialogKey(Keys keyData)
+    {
+        if (keyData == Keys.Escape)
+        {
+            if (!_busy) Close();
+            return true;
+        }
+        return base.ProcessDialogKey(keyData);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)

@@ -6,15 +6,17 @@ namespace Dsm.Ui;
 /// <summary>Main window: menu, toolbar, category tree, download list and status bar.</summary>
 internal sealed partial class MainForm : Form
 {
+    private const int SizeColumn = 1;
     private const int ProgressColumn = 2;
     private const int StatusColumn = 5;
+    private const int AddedColumn = 6;
     private readonly DateTime _sessionStart = DateTime.Now;
     private (TaskbarState State, int Permille) _taskbar = (TaskbarState.None, -1);
     private readonly Shell _shell;
     private readonly MenuStrip _menu = new();
     private readonly ToolStrip _toolbar = new();
-    private readonly ToolStripTextBox _search = new();
-    private readonly TreeView _tree = new();
+    private readonly SearchBox _search = new("Search downloads", "Ctrl+F");
+    private readonly NavTree _tree = new();
     private readonly SmoothListView _list = new();
     private readonly SplitContainer _split = new();
     private readonly StatusStrip _status = new();
@@ -28,6 +30,10 @@ internal sealed partial class MainForm : Form
     private readonly List<ToolStripItem> _needsSelection = [];
     private string _filter = "All";
     private bool _listDirty = true;
+    private int _hoverRow = -1;
+    private TreeNode? _hoverNode;
+    private bool _fittingColumns;
+    private bool _statusResized; // the user dragged the Status column: stop sizing it automatically
 
     public MainForm(Shell shell)
     {
@@ -133,6 +139,23 @@ internal sealed partial class MainForm : Form
             _filter = (string)e.Node!.Tag!;
             MarkDirty();
         };
+        _tree.MouseMove += (_, e) => SetHoverNode(_tree.GetNodeAt(e.Location));
+        _tree.MouseLeave += (_, _) => SetHoverNode(null);
+        _tree.GotFocus += (_, _) => InvalidateNode(_tree.SelectedNode);
+        _tree.LostFocus += (_, _) => InvalidateNode(_tree.SelectedNode);
+    }
+
+    private void SetHoverNode(TreeNode? node)
+    {
+        if (node == _hoverNode) return;
+        InvalidateNode(_hoverNode);
+        _hoverNode = node;
+        InvalidateNode(node);
+    }
+
+    private void InvalidateNode(TreeNode? node)
+    {
+        if (node is { IsVisible: true }) _tree.Invalidate(new Rectangle(0, node.Bounds.Y, _tree.ClientSize.Width, node.Bounds.Height));
     }
 
     /// <summary>Navigation-pane style rows: full-width selection with an accent marker, in theme colours.</summary>
@@ -142,11 +165,17 @@ internal sealed partial class MainForm : Form
         var g = e.Graphics;
         var row = new Rectangle(0, e.Bounds.Y, _tree.ClientSize.Width, e.Bounds.Height);
         var selected = node.IsSelected;
-        using (var back = new SolidBrush(selected ? Theme.Selected : Theme.Sidebar)) g.FillRectangle(back, row);
+        var fill = selected ? Theme.Selected : node == _hoverNode ? Theme.NavHover : Theme.Sidebar;
+        using (var back = new SolidBrush(fill)) g.FillRectangle(back, row);
         if (selected)
         {
             using var marker = new SolidBrush(Theme.Accent);
             g.FillRectangle(marker, 0, row.Y + row.Height / 4, LogicalToDeviceUnits(3), row.Height / 2);
+            if (_tree.Focused && _tree.FocusCuesVisible)
+            {
+                using var outline = new Pen(Theme.Accent); // keyboard focus, as in the download list
+                g.DrawRectangle(outline, row.X, row.Y, row.Width - 1, row.Height - 1);
+            }
         }
         var x = LogicalToDeviceUnits(12) + node.Level * _tree.Indent;
         var tint = (string)node.Tag! switch
@@ -175,43 +204,94 @@ internal sealed partial class MainForm : Form
 
     private void BuildList()
     {
-        var images = new ImageList { ColorDepth = ColorDepth.Depth32Bit, ImageSize = new Size(16, 16) };
-        foreach (var category in Categories.All) images.Images.Add(category, Glyphs.Render(Glyphs.ForCategory(category), 16, Glyphs.Accent));
-
         _list.Dock = DockStyle.Fill;
         _list.View = View.Details;
         _list.FullRowSelect = true;
         _list.HideSelection = false;
         _list.BorderStyle = BorderStyle.None;
         _list.OwnerDraw = true;
-        _list.SmallImageList = images;
+        // Rows are drawn in DrawCell (icons included); this image list only sets a roomier row height.
+        _list.SmallImageList = new ImageList { ImageSize = new Size(1, LogicalToDeviceUnits(26)) };
         _list.ContextMenuStrip = _rowMenu;
-        _list.Columns.Add("File name", LogicalToDeviceUnits(280)); // widened to fill by FitNameColumn
+        _list.Columns.Add("File name", LogicalToDeviceUnits(280)); // File name and Status are sized by FitColumns
         _list.Columns.Add("Size", LogicalToDeviceUnits(80), HorizontalAlignment.Right);
         _list.Columns.Add("Progress", LogicalToDeviceUnits(140));
         _list.Columns.Add("Speed", LogicalToDeviceUnits(88), HorizontalAlignment.Right);
         _list.Columns.Add("Time left", LogicalToDeviceUnits(78), HorizontalAlignment.Right);
         _list.Columns.Add("Status", LogicalToDeviceUnits(150));
         _list.ShowItemToolTips = true; // full error text (or the link) on hover
-        _list.Columns.Add("Added", LogicalToDeviceUnits(118));
+        _list.Columns.Add("Added", DateColumnWidth());
         _list.BackColor = Theme.Window;
         _list.ForeColor = Theme.Text;
         _list.DrawColumnHeader += (_, e) => Theme.DrawHeader(e, _list.Font);
         _list.DrawItem += (_, _) => { };
         _list.DrawSubItem += DrawCell;
         _list.DoubleClick += (_, _) => OpenOrShowSelected();
-        _list.Resize += (_, _) => FitNameColumn();
+        _list.Resize += (_, _) => FitColumns();
+        _list.ColumnWidthChanged += (_, e) =>
+        {
+            if (!_fittingColumns && e.ColumnIndex == StatusColumn && Control.MouseButtons.HasFlag(System.Windows.Forms.MouseButtons.Left))
+                _statusResized = true;
+            _list.Invalidate(); // owner-drawn cells depend on the column width
+        };
         _list.SelectedIndexChanged += (_, _) => UpdateCommands();
+        // Selection is tinted with the accent while the list has focus and grey otherwise.
+        _list.GotFocus += (_, _) => _list.Invalidate();
+        _list.LostFocus += (_, _) => _list.Invalidate();
+        _list.MouseMove += (_, e) => SetHoverRow(_list.GetItemAt(e.X, e.Y)?.Index ?? -1);
+        _list.MouseLeave += (_, _) => SetHoverRow(-1);
         BuildRowMenu();
     }
 
-    /// <summary>The file-name column takes whatever width the other columns leave (no horizontal scrollbar).</summary>
-    private void FitNameColumn()
+    /// <summary>Wide enough for any date in the user's short date and time format.</summary>
+    private int DateColumnWidth()
+    {
+        var widest = Enumerable.Range(1, 12)
+            .SelectMany(month => new[] { new DateTime(2026, month, 28, 10, 58, 0), new DateTime(2026, month, 28, 22, 58, 0) })
+            .Max(date => TextRenderer.MeasureText(Format.Date(date), _list.Font).Width);
+        return widest + LogicalToDeviceUnits(14);
+    }
+
+    /// <summary>
+    /// Columns fill the list without a horizontal scrollbar: Status gets part of any spare room
+    /// (unless the user sized it) so error messages show more, and File name takes the rest.
+    /// </summary>
+    private void FitColumns()
     {
         if (_list.Columns.Count == 0) return;
-        var others = _list.Columns.Cast<ColumnHeader>().Skip(1).Sum(c => c.Width);
-        var width = Math.Max(LogicalToDeviceUnits(180), _list.ClientSize.Width - others - 2);
-        if (_list.Columns[0].Width != width) _list.Columns[0].Width = width;
+        _fittingColumns = true;
+        try
+        {
+            var name = _list.Columns[0];
+            var status = _list.Columns[StatusColumn];
+            var others = _list.Columns.Cast<ColumnHeader>().Where(c => c != name && c != status).Sum(c => c.Width);
+            var free = _list.ClientSize.Width - others - 2;
+            if (!_statusResized)
+            {
+                var spare = free - LogicalToDeviceUnits(240) - LogicalToDeviceUnits(150); // File name gets 240 first
+                var width = LogicalToDeviceUnits(150) + Math.Clamp(spare * 2 / 5, 0, LogicalToDeviceUnits(200));
+                if (status.Width != width) status.Width = width;
+            }
+            var nameWidth = Math.Max(LogicalToDeviceUnits(180), free - status.Width);
+            if (name.Width != nameWidth) name.Width = nameWidth;
+        }
+        finally
+        {
+            _fittingColumns = false;
+        }
+    }
+
+    private void SetHoverRow(int index)
+    {
+        if (index == _hoverRow) return;
+        InvalidateRow(_hoverRow);
+        _hoverRow = index;
+        InvalidateRow(_hoverRow);
+    }
+
+    private void InvalidateRow(int index)
+    {
+        if (index >= 0 && index < _list.Items.Count) _list.Invalidate(_list.Items[index].Bounds);
     }
 
     private void BuildStatus()
@@ -224,40 +304,91 @@ internal sealed partial class MainForm : Form
     }
 
     /// <summary>
-    /// Progress and Status cells are coloured by state (green running or done, yellow paused or
-    /// waiting, red failed); other cells use default drawing.
+    /// Every cell is drawn here so rows look the same in both themes: hover and selection tints
+    /// (with an accent marker while the list has focus), the category icon, a progress bar and a
+    /// Status coloured by state (green running or done, yellow paused or waiting, red failed).
     /// </summary>
     private void DrawCell(object? sender, DrawListViewSubItemEventArgs e)
     {
-        if (e.ColumnIndex is not (ProgressColumn or StatusColumn) || e.Item?.Tag is not DownloadItem d)
+        if (e.Item is not { Tag: DownloadItem d } row)
         {
             e.DrawDefault = true;
             return;
         }
         var g = e.Graphics;
-        var highlighted = e.Item.Selected && _list.Focused;
-        var back = e.Item.Selected ? (_list.Focused ? SystemColors.Highlight : Theme.Selected) : _list.BackColor;
-        using (var brush = new SolidBrush(back)) g.FillRectangle(brush, e.Bounds);
+        var cell = e.Bounds;
+        var focused = _list.Focused;
+        var back = Theme.RowBack(row.Selected, focused, row.Index == _hoverRow, _list.BackColor);
+        using (var brush = new SolidBrush(back)) g.FillRectangle(brush, cell);
+        var pad = LogicalToDeviceUnits(6);
+        const TextFormatFlags Line = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
 
-        if (e.ColumnIndex == StatusColumn)
+        switch (e.ColumnIndex)
         {
-            TextRenderer.DrawText(g, e.SubItem?.Text, _list.Font, Rectangle.Inflate(e.Bounds, -6, 0),
-                highlighted ? SystemColors.HighlightText : Theme.TextForStatus(d.Status),
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-            return;
+            case 0:
+                if (row.Selected && focused)
+                {
+                    using var marker = new SolidBrush(Theme.Accent);
+                    g.FillRectangle(marker, cell.X, cell.Y + cell.Height / 4, LogicalToDeviceUnits(3), cell.Height / 2);
+                }
+                var icon = Glyphs.Render(Glyphs.ForCategory(d.Category), LogicalToDeviceUnits(16), Glyphs.Accent);
+                var x = cell.X + LogicalToDeviceUnits(10);
+                g.DrawImage(icon, x, cell.Y + (cell.Height - icon.Height) / 2);
+                x += icon.Width + LogicalToDeviceUnits(6);
+                var nameArea = new Rectangle(x, cell.Y, Math.Max(0, cell.Right - x - pad), cell.Height);
+                TextRenderer.DrawText(g, FitMiddle(g, e.SubItem?.Text ?? "", nameArea.Width), _list.Font, nameArea, Theme.Text, Line);
+                break;
+            case ProgressColumn:
+                var textWidth = LogicalToDeviceUnits(44);
+                var height = LogicalToDeviceUnits(6);
+                var bar = new Rectangle(cell.X + pad, cell.Y + (cell.Height - height) / 2,
+                    Math.Max(LogicalToDeviceUnits(10), cell.Width - 2 * pad - textWidth - LogicalToDeviceUnits(6)), height);
+                Theme.DrawBar(g, bar, d.Fraction ?? 0, Theme.ForStatus(d.Status), Theme.TrackOn(back));
+                TextRenderer.DrawText(g, e.SubItem?.Text, _list.Font, new Rectangle(cell.Right - pad - textWidth, cell.Y, textWidth, cell.Height),
+                    Theme.Text, TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                break;
+            default:
+                var color = e.ColumnIndex switch
+                {
+                    StatusColumn => Theme.TextForStatus(d.Status),
+                    SizeColumn or AddedColumn when !row.Selected => Theme.Muted, // details, quieter than the name
+                    _ => Theme.Text,
+                };
+                var align = _list.Columns[e.ColumnIndex].TextAlign == HorizontalAlignment.Right ? TextFormatFlags.Right : TextFormatFlags.Left;
+                TextRenderer.DrawText(g, e.SubItem?.Text, _list.Font, Rectangle.Inflate(cell, -pad, 0), color, Line | align);
+                break;
         }
 
-        var textWidth = LogicalToDeviceUnits(46);
-        var bar = new Rectangle(e.Bounds.X + 6, e.Bounds.Y + e.Bounds.Height / 2 - 4, Math.Max(10, e.Bounds.Width - textWidth - 12), 8);
-        using (var track = new SolidBrush(Theme.Track)) g.FillRectangle(track, bar);
-        if (d.Fraction is double fraction)
+        // Keyboard focus: an accent outline around the focused row, each cell drawing its part.
+        if (focused && row.Focused && _list.FocusCuesVisible)
         {
-            using var fill = new SolidBrush(Theme.ForStatus(d.Status));
-            g.FillRectangle(fill, bar.X, bar.Y, (int)(bar.Width * fraction), bar.Height);
+            using var pen = new Pen(Theme.Accent);
+            var bottom = cell.Bottom - 1;
+            g.DrawLine(pen, cell.Left, cell.Top, cell.Right - 1, cell.Top);
+            g.DrawLine(pen, cell.Left, bottom, cell.Right - 1, bottom);
+            if (e.ColumnIndex == 0) g.DrawLine(pen, cell.Left, cell.Top, cell.Left, bottom);
+            if (e.ColumnIndex == _list.Columns.Count - 1) g.DrawLine(pen, cell.Right - 1, cell.Top, cell.Right - 1, bottom);
         }
-        var textRect = new Rectangle(bar.Right + 4, e.Bounds.Y, textWidth, e.Bounds.Height);
-        TextRenderer.DrawText(g, Format.Percent(d), _list.Font, textRect, highlighted ? SystemColors.HighlightText : Theme.Text,
-            TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+    }
+
+    /// <summary>
+    /// A file name that is too wide loses its middle ("long-file-na…remaster.flac"), so the
+    /// extension and version at the end stay readable.
+    /// </summary>
+    private string FitMiddle(Graphics g, string name, int width)
+    {
+        const TextFormatFlags Flags = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
+        int Width(string text) => TextRenderer.MeasureText(g, text, _list.Font, new Size(int.MaxValue, int.MaxValue), Flags).Width;
+        if (width <= 0 || Width(name) <= width) return name;
+        var tail = Math.Min(name.Length / 2, 14);
+        int lo = 0, hi = name.Length - tail; // longest start that still fits
+        while (lo < hi)
+        {
+            var mid = (lo + hi + 1) / 2;
+            if (Width(string.Concat(name.AsSpan(0, mid), "…", name.AsSpan(name.Length - tail))) <= width) lo = mid;
+            else hi = mid - 1;
+        }
+        return lo < 4 ? name : string.Concat(name.AsSpan(0, lo), "…", name.AsSpan(name.Length - tail)); // too narrow: plain end ellipsis
     }
 
     private void RefreshView()
@@ -290,6 +421,7 @@ internal sealed partial class MainForm : Form
     {
         _listDirty = false;
         var selected = Selected().Select(d => d.Id).ToHashSet();
+        _hoverRow = -1;
         _list.BeginUpdate();
         _list.Items.Clear();
         _rows.Clear();
@@ -302,6 +434,24 @@ internal sealed partial class MainForm : Form
             row.Selected = selected.Contains(d.Id);
         }
         _list.EndUpdate();
+        UpdateEmptyMessage(items.Count);
+    }
+
+    /// <summary>What the list says when nothing is shown: why, and what to do next.</summary>
+    private void UpdateEmptyMessage(int total)
+    {
+        var query = _search.Text.Trim();
+        var (glyph, title, hint) =
+            query.Length > 0 ? (Glyphs.Search, $"No downloads match \"{query}\"",
+                _filter == "All" ? "Try another part of the file name." : "Try another part of the file name, or choose All downloads.")
+            : total == 0 ? (Glyphs.Download, "No downloads yet", "Click Add URL or press Ctrl+N to download a file.\nYou can also drop a link here.")
+            : _filter switch
+            {
+                "Unfinished" => (TreeGlyph(_filter), "No unfinished downloads", "Everything you added has finished."),
+                "Finished" => (TreeGlyph(_filter), "No finished downloads yet", "Downloads show up here once they complete."),
+                _ => (TreeGlyph(_filter), $"No downloads in {_filter}", "Choose All downloads to see everything."),
+            };
+        _list.SetEmptyMessage(glyph, title, hint);
     }
 
     private static void UpdateRow(ListViewItem row, DownloadItem d)
@@ -314,7 +464,6 @@ internal sealed partial class MainForm : Form
         Set(row, 4, downloading ? Format.Eta(d.EtaSeconds) : "");
         Set(row, 5, d.Status == DownloadStatus.Error ? $"Error: {d.Error}" : Format.Status(d));
         Set(row, 6, Format.Date(d.CreatedAt));
-        if (row.ImageKey != d.Category) row.ImageKey = d.Category;
         var tip = d.Status == DownloadStatus.Error ? $"{d.Error}\n{d.Url}" : d.Url;
         if (row.ToolTipText != tip) row.ToolTipText = tip;
     }

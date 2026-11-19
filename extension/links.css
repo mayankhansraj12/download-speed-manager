@@ -1,25 +1,36 @@
-body { display: flex; flex-direction: column; min-height: 100vh; }
+/* The page never scrolls as a whole: the list scrolls between the toolbar and the action bar, so the
+   column headings and the Download button stay in view however many links there are. */
+body { display: flex; flex-direction: column; height: 100vh; }
 .bar { display: flex; align-items: center; gap: 12px; padding: 16px 24px 12px; }
-.bar p { margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80vw; }
+.bar > div { flex: 1; min-width: 0; }
+.bar p { margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar p.error { white-space: normal; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 0 24px 12px; border-bottom: 1px solid var(--border); }
 .toolbar input[type="search"] { flex: 0 1 300px; min-width: 200px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { padding: 4px 11px; border-radius: 999px; font-size: 12px; }
-.chips button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.chips .n { opacity: 0.75; margin-left: 4px; }
-main { flex: 1; overflow: auto; padding: 0 24px; }
+.chips button[aria-pressed="true"] { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
+.chips .n { opacity: 0.75; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.chips button[aria-pressed="true"] .n { opacity: 1; }
+main { flex: 1; min-height: 0; overflow: auto; padding: 0 24px; }
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-th { position: sticky; top: 0; background: var(--bg); text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+/* A box-shadow instead of a border: collapsed borders don't travel with a sticky heading. */
+th { position: sticky; top: 0; z-index: 1; background: var(--bg); box-shadow: inset 0 -1px 0 var(--border); text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 10px 8px; }
 td { padding: 7px 8px; border-bottom: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-tr:hover td { background: var(--panel); }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: color-mix(in srgb, var(--text) 5%, var(--bg)); }
 .pick { width: 36px; }
 .type { width: 110px; }
 td.url { color: var(--muted); }
 .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--raised); font-size: 12px; }
-.empty { padding: 24px 0; text-align: center; }
+.empty { padding: 36px 0; text-align: center; }
+.empty p { margin: 0; }
+.empty button { margin-top: 12px; }
 .actions { display: flex; align-items: center; gap: 16px; padding: 12px 24px; border-top: 1px solid var(--border); background: var(--panel); }
-#result { flex: 1; }
-.later { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+#count { font-variant-numeric: tabular-nums; }
+#result { flex: 1; min-width: 0; }
+.later { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+#download { min-width: 116px; }
 @media (max-width: 640px) {
   td.url, th:last-child { display: none; }
   .actions { flex-wrap: wrap; }

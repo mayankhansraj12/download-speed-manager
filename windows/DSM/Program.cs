@@ -43,6 +43,8 @@ internal static class Program
 #if DEBUG
         var capture = Array.IndexOf(args, "--capture");
         if (capture >= 0 && capture + 1 < args.Length) Capture.Schedule(shell, args[capture + 1]);
+        var frames = Array.IndexOf(args, "--capture-frames");
+        if (frames >= 0 && frames + 1 < args.Length) Capture.ScheduleFrames(shell, args[frames + 1]);
 #endif
         Application.Run(shell);
         return 0;

@@ -5,6 +5,9 @@ managers do: a main window with categories, a progress window per download, a no
 link catching from the clipboard and the browser, and a command line compatible with IDM's switches.
 The design and artwork are original; no IDM code, images or branding are used.
 
+For an overview, screenshots and downloads, see the [main README](../README.md). This page is the
+detailed reference for the Windows app.
+
 ## Themes
 
 The dark theme is the default. *Options → General → Theme* switches to Light or follows Windows (System).
